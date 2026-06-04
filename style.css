@@ -61,12 +61,11 @@ body {
 }
 
 .nav-links li {
-    padding: 15px 20px;
+    display: flex;
+    align-items: center; /* Centraliza o ícone e o texto verticalmente */
+    padding: 15px 25px;
     cursor: pointer;
     transition: 0.3s;
-    display: flex;
-    align-items: center;
-    gap: 10px;
 }
 
 .nav-links li:hover, .nav-links li.active {
@@ -145,6 +144,13 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 th, td { padding: 15px; text-align: left; border-bottom: 1px solid #edf2f7; }
 th { background: var(--primary-blue); color: white; }
 
+.nav-icon {
+    width: 24px;      /* Largura do ícone */
+    height: 24px;     /* Altura do ícone */
+    object-fit: contain; /* Garante que a imagem não amasse */
+    margin-right: 12px; /* Espaço entre a imagem e o texto */
+    vertical-align: middle; /* Ajuda a alinhar com a base do texto */
+}
 @media (max-width: 1024px) {
     .grid-ambientes {
         grid-template-columns: repeat(2, 1fr);
@@ -169,26 +175,49 @@ th { background: var(--primary-blue); color: white; }
     }
 
     .menu-toggle {
-        display: flex; /* Aparece apenas no celular */
-        flex-direction: column;
-        gap: 5px;
-        cursor: pointer;
-        position: absolute;
-        right: 20px;
-        top: 35px; /* Centraliza com a logo */
-    }
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    cursor: pointer;
+    position: absolute;
+    right: 40px; 
+    
+    /* Mude de 'top: 50%' para um valor fixo */
+    /* Isso garante que ele não 'caia' quando o menu expandir */
+    top: 45px; 
+    
+    /* Remova o transform antigo se ele estiver lá */
+    transform: none; 
+    z-index: 1100; /* Garante que ele fique por cima de tudo */
+}
 
     .menu-toggle span {
-        margin-right: 55px;
-  
         display: block;
-        width: 25px;
-        height: 3px;
+        width: 35px;
+        height: 4px;
         background-color: white;
-        border-radius: 2px;
+        border-radius: 4px;
     }
 
-    /* Esconde os links no celular por padrão */
+    .logo {
+        display: flex;
+        flex-direction: row;
+        
+        /* AQUI: Mudamos para center para a logo ficar no meio da barra */
+        justify-content: center; 
+        
+        align-items: center;
+        padding: 20px 0; /* Ajuste no respiro vertical */
+        border-bottom: none;
+        width: 100%;
+    }
+
+    .logo img {
+        max-width: 180px; /* Ajuste o tamanho conforme sua preferência */
+        height: auto;
+    }
+
+    /* O restante continua igual para o menu funcionar */
     .nav-links {
         display: none; 
         flex-direction: column;
@@ -197,36 +226,18 @@ th { background: var(--primary-blue); color: white; }
         padding-bottom: 20px;
     }
 
-    /* Mostra os links quando a classe 'active' for adicionada pelo JS */
     .sidebar.active .nav-links {
         display: flex;
-    }
-
-    .logo {
-        flex-direction: row;
-        justify-content: flex-start;
-        
-        /* Aumente o padding vertical (o primeiro número) para a barra azul crescer */
-        padding: 25px 20px; 
-        
-        border-bottom: none;
-        width: 100%;
-    }
-
-    .logo img {
-        /* Aumente este valor para a logo crescer */
-        max-width: 150px; 
-        height: auto;
     }
 
     .content {
         margin-left: 0;
         padding: 20px;
-        padding-top: 130px; /* Evita que o conteúdo suba para trás da barra */
+        padding-top: 140px;
     }
 
     .grid-ambientes {
-        grid-template-columns: 1fr; /* Um card por linha no celular */
+        grid-template-columns: 1fr;
     }
 }
 /* Fundo escurecido atrás do modal */
