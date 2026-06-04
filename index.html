@@ -105,34 +105,45 @@
     </div> </section>
 
         <section id="reserva" class="view" style="display:none;">
-            <h1>Reserva do ambiente</h1>
-            <div class="reserva-container">
-                <div class="form-reserva">
-                    <div class="form-group">
-                        <label>Ambiente</label>
-                        <select id="select-ambiente">
-                            <option value="Biblioteca">Biblioteca</option>
-                            <option value="Sala 01">Sala 01</option>
-                            <option value="Sala de Reunião">Sala de Reunião</option>
-                            <option value="Laboratório">Laboratório</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Motivo da reserva</label>
-                        <input type="text" id="motivo" placeholder="Ex: Aula de Redes">
-                    </div>
-                    <div class="form-group">
-                        <label>Data e Hora de Início</label>
-                        <input type="datetime-local" id="data-inicio">
-                    </div>
-                    <div class="form-group">
-                        <label>Data e Hora de Término</label>
-                        <input type="datetime-local" id="data-fim">
-                    </div>
-                    <button class="btn-primary full-width" onclick="salvarReserva()">Agendar</button>
-                </div>
+    <h1>Reserva do ambiente</h1>
+    <div class="reserva-container">
+        
+        <div class="header-reserva">
+            <img id="img-ambiente-reserva" src="imagens/ccc.jpg" alt="Ambiente selecionado">
+        </div>
+
+        <div class="form-reserva">
+            <div class="form-group">
+                <label>Ambiente</label>
+                <select id="select-ambiente" onchange="trocarFotoReserva()">
+                    <option value="Biblioteca">Biblioteca</option>
+                    <option value="Sala 01">Sala 01</option>
+                    <option value="Sala 02">Sala 02</option>
+                    <option value="Sala de Reunião">Sala de Reunião</option>
+                    <option value="Laboratório de Informática">Laboratório de Informática</option>
+                    <option value="Laboratório Científico">Laboratório Científico</option>
+                </select>
             </div>
-        </section>
+            
+            <div class="form-group">
+                <label>Motivo da reserva</label>
+                <input type="text" id="motivo" placeholder="Ex: Aula de Redes">
+            </div>
+            
+            <div class="form-group">
+                <label>Data e Hora de Início</label>
+                <input type="datetime-local" id="data-inicio">
+            </div>
+            
+            <div class="form-group">
+                <label>Data e Hora de Término</label>
+                <input type="datetime-local" id="data-fim">
+            </div>
+            
+            <button class="btn-primary full-width" onclick="salvarReserva()">Agendar</button>
+        </div>
+    </div>
+</section>
 
         <section id="lista" class="view" style="display:none;">
             <h1>Lista de Reserva</h1>

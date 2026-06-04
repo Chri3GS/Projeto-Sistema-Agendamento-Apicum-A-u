@@ -20,7 +20,22 @@ function abrirReserva(nomeAmbiente) {
     document.getElementById('select-ambiente').value = nomeAmbiente;
     showSection('reserva', document.querySelectorAll('.nav-links li')[1]);
 }
+function trocarFotoReserva() {
+    const ambiente = document.getElementById('select-ambiente').value;
+    const imagem = document.getElementById('img-ambiente-reserva');
+    
+    // Aqui você coloca o caminho das suas fotos reais
+    const mapaFotos = {
+        "Biblioteca": "imagens/ccc.jpg", 
+        "Sala 01": "imagens/sala01.jpg",
+        "Sala 02": "imagens/sala02.jpg",
+        "Sala de Reunião": "imagens/sala_reuniao.jpg",
+        "Laboratório de Informática": "imagens/lab_info.jpg",
+        "Laboratório Científico": "imagens/lab_cientifico.jpg"
+    };
 
+    imagem.src = mapaFotos[ambiente] || "imagens/ccc.jpg";
+}
 // Salvar a reserva e atualizar a tabela
 function salvarReserva() {
     const ambiente = document.getElementById('select-ambiente').value;
@@ -97,10 +112,28 @@ const dadosSalas = {
         recursos: ["Internet banda larga", "Mesas redondas grandes", "Cadeiras confortáveis", "Acervo de livros", "Suporte humano"]
     },
     "Sala 01": {
-        info: ["Projetor disponível", "Ar-condicionado", "Capacidade: 30 pessoas"],
-        recursos: ["Quadro branco", "Cadeiras universitárias", "Sistema de som"]
+        info: ["Sala climatizada", "Iluminação ambiente", "Capacidade: 30 pessoas"],
+        recursos: ["Internet banda larga", "Mesa para docente", "Cadeiras","Data Show","Tela de projeção","Quadro branco","Caixa de som"]
+    },
+    "Sala 02": {
+        info: ["Sala climatizada", "Iluminação ambiente", "Capacidade: 30 pessoas"],
+        recursos: ["Internet banda larga", "Mesa para docente", "Cadeiras","Data Show","Tela de projeção","Quadro branco","Caixa de som"]
+    },
+    "Sala de Reunião": {
+        info: ["Sala climatizada", "Iluminação ambiente", "Capacidade: 10 pessoas"],
+        recursos: ["Internet banda larga", "Mesas grande", "Cadeiras confortáveis","Data Show","Tela de projeção","Caixa de som"]
     }
-    // Adicione as outras salas aqui seguindo o mesmo padrão
+    ,
+    "Laboratório de Informática": {
+        info: ["Sala climatizada", "Iluminação ambiente", "Capacidade: 20 pessoas"],
+        recursos: ["Internet banda larga", "Computadores", "Mesas","Cadeiras","Equipamentos multimídia"]
+    }
+    ,
+    "Laboratório Científico": {
+        info: ["Sala climatizada", "Iluminação ambiente", "Capacidade: 20 pessoas"],
+        recursos: ["Internet banda larga", "Mesas","Cadeiras","Equipamentos multimídia"]
+    }
+    
 };
 
 function abrirInformacao(nomeSala) {

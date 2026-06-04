@@ -33,6 +33,20 @@ body {
     position: fixed;
 }
 
+.header-reserva {
+    width: 100%;
+    height: 180px; /* Altura da foto na tela de reserva */
+    overflow: hidden;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+#img-ambiente-reserva {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Faz a foto preencher sem distorcer */
+    transition: 0.3s; /* Efeito suave na troca */
+}
 .logo {
     padding: 20px;
     font-weight: bold;
