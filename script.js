@@ -30,8 +30,7 @@ function trocarFotoReserva() {
         "Sala 01": "imagens/sala01.jpg",
         "Sala 02": "imagens/sala02.jpg",
         "Sala de Reunião": "imagens/sala_reuniao.jpg",
-        "Laboratório de Informática": "imagens/lab_info.jpg",
-        "Laboratório Científico": "imagens/lab_cientifico.jpg"
+        "Laboratório de Informática": "imagens/lab_info.jpg"    
     };
 
     imagem.src = mapaFotos[ambiente] || "imagens/ccc.jpg";
@@ -127,11 +126,6 @@ const dadosSalas = {
     "Laboratório de Informática": {
         info: ["Sala climatizada", "Iluminação ambiente", "Capacidade: 20 pessoas"],
         recursos: ["Internet banda larga", "Computadores", "Mesas","Cadeiras","Equipamentos multimídia"]
-    }
-    ,
-    "Laboratório Científico": {
-        info: ["Sala climatizada", "Iluminação ambiente", "Capacidade: 20 pessoas"],
-        recursos: ["Internet banda larga", "Mesas","Cadeiras","Equipamentos multimídia"]
     }
     
 };

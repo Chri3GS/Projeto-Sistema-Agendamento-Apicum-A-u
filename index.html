@@ -13,6 +13,7 @@
         <span></span>
         <span></span>
         <span></span>
+        <span></span>
     </div>
     <div class="logo">
         <img src="imagens/logo.png" alt="">
@@ -26,6 +27,9 @@
     </li>
     <li onclick="showSection('lista', this)">
         <img src="imagens/icone lista.png" class="nav-icon"> Lista
+    </li>
+    <li onclick="showSection('falarComCt', this)">
+        <img src="imagens/icone falar com CT.png" class="nav-icon"> Falar com o CT
     </li>
 </ul>
 </nav>
@@ -91,17 +95,6 @@
         </div>
         
 
-        <div class="card">
-            <img src="imagens/ccc.jpg" alt="Laboratório Científico">
-            <div class="card-body">
-                <h3>Laboratório Científico</h3>
-                <div class="buttons">
-                    <button class="btn-info" onclick="abrirInformacao('Laboratório Científico')">Informações</button>
-                    <button class="btn-primary" onclick="abrirReserva('Laboratório Científico')">Agendar</button>
-                </div>
-            </div>
-        </div>
-
     </div> </section>
 
         <section id="reserva" class="view" style="display:none;">
@@ -121,7 +114,6 @@
                     <option value="Sala 02">Sala 02</option>
                     <option value="Sala de Reunião">Sala de Reunião</option>
                     <option value="Laboratório de Informática">Laboratório de Informática</option>
-                    <option value="Laboratório Científico">Laboratório Científico</option>
                 </select>
             </div>
             
@@ -160,6 +152,10 @@
                         </tbody>
                 </table>
             </div>
+        </section>
+
+        <section id="falarComCt" class="view" style="display:none;">
+        
         </section>
     </main>
 
