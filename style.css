@@ -1,0 +1,313 @@
+:root {
+    --primary-blue: #0e3da3;
+    --hover-blue: #184bc7;
+    --text-dark: #334155;
+    --bg-light: #f4f7f9;
+}
+
+* {
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+    /* Configurações de Fundo Corretas aqui no Body */
+    background-image: url('imagens/fundo.png'); 
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    background-color: var(--bg-light);
+}
+
+/* Sidebar Responsiva */
+.sidebar {
+    width: 260px;
+    background-color: var(--primary-blue);
+    color: white;
+    height: 100vh;
+    position: fixed;
+}
+
+.logo {
+    padding: 20px;
+    font-weight: bold;
+    font-size: 1.2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    
+    /* Novos alinhamentos para a imagem e o texto */
+    display: flex;
+    flex-direction: column; /* Deixa a imagem em cima e a letra 'C' embaixo, se quiser manter ambos */
+    align-items: center;    /* Centraliza tudo na barra lateral */
+    gap: 10px;              /* Dá um espaço entre a imagem e o texto */
+    text-align: center;
+}
+
+.logo img {
+    width: 100%;           /* Faz a imagem ocupar no máximo a largura interna da sidebar */
+    max-width: 250px;      /* Define um tamanho limite para não ficar gigante (ajuste esse valor se quiser menor/maior) */
+    height: auto;          /* Mantém a proporção da foto para não amassar */
+    object-fit: contain;
+    display: block;
+}
+
+.nav-links {
+    list-style: none;
+    margin-top: 20px;
+}
+
+.nav-links li {
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nav-links li:hover, .nav-links li.active {
+    background-color: rgba(255,255,255,0.15);
+    border-left: 4px solid #fff;
+}
+
+/* Conteúdo Principal */
+.content {
+    margin-left: 260px;
+    padding: 40px;
+    width: 100%;
+}
+
+h1 { color: var(--text-dark); margin-bottom: 30px; }
+
+/* Grid de Ambientes */
+.grid-ambientes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 colunas iguais */
+    gap: 25px;
+    width: 100%;
+}
+
+.card {
+    margin-top: 20px;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Ajuda no cálculo do grid */
+    width: 100%;
+}
+
+.card img { width: 100%; height: 220px; object-fit: cover; }
+.card-body { padding: 20px; }
+.card-body h3 { margin-bottom: 15px; }
+
+.buttons { display: flex; gap: 10px; }
+
+button {
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn-primary { background: var(--primary-blue); color: white; flex: 1; }
+.btn-info { background: #e2e8f0; color: var(--text-dark); flex: 1; }
+
+/* Formulário e Tabela */
+.reserva-container {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    max-width: 500px;
+}
+
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: 600; }
+.form-group input, .form-group select {
+    width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px;
+}
+
+.table-container {
+    background: white;
+    border-radius: 12px;
+    overflow-x: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+table { width: 100%; border-collapse: collapse; min-width: 500px; }
+th, td { padding: 15px; text-align: left; border-bottom: 1px solid #edf2f7; }
+th { background: var(--primary-blue); color: white; }
+
+@media (max-width: 1024px) {
+    .grid-ambientes {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* --- CONFIGURAÇÃO PADRÃO (COMPUTADOR) --- */
+.menu-toggle {
+    display: none; /* Escondido no PC */
+}
+
+/* --- CONFIGURAÇÃO PARA CELULAR (ATÉ 768px) --- */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+        padding-top: 0;
+    }
+
+    .menu-toggle {
+        display: flex; /* Aparece apenas no celular */
+        flex-direction: column;
+        gap: 5px;
+        cursor: pointer;
+        position: absolute;
+        right: 20px;
+        top: 35px; /* Centraliza com a logo */
+    }
+
+    .menu-toggle span {
+        margin-right: 55px;
+  
+        display: block;
+        width: 25px;
+        height: 3px;
+        background-color: white;
+        border-radius: 2px;
+    }
+
+    /* Esconde os links no celular por padrão */
+    .nav-links {
+        display: none; 
+        flex-direction: column;
+        width: 100%;
+        background-color: var(--primary-blue);
+        padding-bottom: 20px;
+    }
+
+    /* Mostra os links quando a classe 'active' for adicionada pelo JS */
+    .sidebar.active .nav-links {
+        display: flex;
+    }
+
+    .logo {
+        flex-direction: row;
+        justify-content: flex-start;
+        
+        /* Aumente o padding vertical (o primeiro número) para a barra azul crescer */
+        padding: 25px 20px; 
+        
+        border-bottom: none;
+        width: 100%;
+    }
+
+    .logo img {
+        /* Aumente este valor para a logo crescer */
+        max-width: 150px; 
+        height: auto;
+    }
+
+    .content {
+        margin-left: 0;
+        padding: 20px;
+        padding-top: 130px; /* Evita que o conteúdo suba para trás da barra */
+    }
+
+    .grid-ambientes {
+        grid-template-columns: 1fr; /* Um card por linha no celular */
+    }
+}
+/* Fundo escurecido atrás do modal */
+.modal {
+    display: none; /* Escondido por padrão */
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* Efeito de sombra no fundo */
+    align-items: center;
+    justify-content: center;
+}
+
+/* Caixa do Modal */
+.modal-content {
+    background-color: #fff;
+    /* Adicione sua imagem de fundo aqui para cobrir tudo */
+    background-image: url('imagens/fundo-modal.png'); 
+    background-size: cover;
+    background-position: center;
+    
+    width: 90%;
+    max-width: 400px;
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: abrirModal 0.3s ease-out;
+}
+
+@keyframes abrirModal {
+    from { transform: scale(0.7); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+    background-color: #1a73e8; 
+    color: white;
+    padding: 25px;
+    text-align: cente
+    r;
+}
+
+.modal-body {
+    padding: 20px 30px;
+    background: transparent; /* Garante que o fundo do pai apareça */
+}
+
+.modal-body h3 {
+    font-size: 1.1rem;
+    color: #1a1a1a;
+    margin-bottom: 10px;
+    margin-top: 15px;
+}
+
+.modal-body ul {
+    list-style: disc;
+    margin-left: 20px;
+    color: #444;
+}
+
+.modal-body li {
+    margin-bottom: 5px;
+}
+
+.modal-footer {
+    padding: 20px;
+    text-align: center;
+    background: transparent; 
+}
+
+.btn-ok {
+    background-color: #1a73e8;
+    color: white;
+    border: none;
+    padding: 12px 50px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(10, 53, 110, 0.3); /* Sombra suave azul */
+}

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda CT APC</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="sidebar" id="sidebar">
+    <div class="menu-toggle" onclick="toggleMenu()">
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+    <div class="logo">
+        <img src="imagens/logo.png" alt="">
+    </div>
+    <ul class="nav-links">
+        <li class="active" onclick="showSection('home', this)">🏢 Ambientes</li>
+        <li onclick="showSection('reserva', this)">📅 Reserva</li>
+        <li onclick="showSection('lista', this)">📋 Lista</li>
+    </ul>
+</nav>
+
+    <main class="content">
+        
+        <section id="home" class="view">
+    <h1>Ambientes disponíveis</h1>
+    
+    <div class="grid-ambientes"> <div class="card">
+            <img src="imagens/ccc.jpg" alt="Biblioteca">
+            <div class="card-body">
+                <h3>Biblioteca</h3>
+                <div class="buttons">
+                    <button class="btn-info" onclick="abrirInformacao('Biblioteca')">Informações</button>
+                    <button class="btn-primary" onclick="abrirReserva('Biblioteca')">Agendar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="imagens/ccc.jpg" alt="Sala 01">
+            <div class="card-body">
+                <h3>Sala 01</h3>
+                <div class="buttons">
+                    <button class="btn-info" onclick="abrirInformacao('Sala 01')">Informações</button>
+                    <button class="btn-primary" onclick="abrirReserva('Sala 01')">Agendar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="imagens/ccc.jpg" alt="Sala 02">
+            <div class="card-body">
+                <h3>Sala 02</h3>
+                <div class="buttons">
+                    <button class="btn-info" onclick="abrirInformacao('Sala 02')">Informações</button>
+                    <button class="btn-primary" onclick="abrirReserva('Sala 02')">Agendar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="imagens/ccc.jpg" alt="Sala de Reunião">
+            <div class="card-body">
+                <h3>Sala de Reunião</h3>
+                <div class="buttons">
+                    <button class="btn-info" onclick="abrirInformacao('Sala de Reunião')">Informações</button>
+                    <button class="btn-primary" onclick="abrirReserva('Sala de Reunião')">Agendar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="imagens/ccc.jpg" alt="Laboratório de Informática">
+            <div class="card-body">
+                <h3>Laboratório de Informática</h3>
+                <div class="buttons">
+                    <button class="btn-info" onclick="abrirInformacao('Laboratório de Informática')">Informações</button>
+                    <button class="btn-primary" onclick="abrirReserva('Laboratório de Informática')">Agendar</button>
+                </div>
+            </div>
+        </div>
+        
+
+        <div class="card">
+            <img src="imagens/ccc.jpg" alt="Laboratório Científico">
+            <div class="card-body">
+                <h3>Laboratório Científico</h3>
+                <div class="buttons">
+                    <button class="btn-info" onclick="abrirInformacao('Laboratório Científico')">Informações</button>
+                    <button class="btn-primary" onclick="abrirReserva('Laboratório Científico')">Agendar</button>
+                </div>
+            </div>
+        </div>
+
+    </div> </section>
+
+        <section id="reserva" class="view" style="display:none;">
+            <h1>Reserva do ambiente</h1>
+            <div class="reserva-container">
+                <div class="form-reserva">
+                    <div class="form-group">
+                        <label>Ambiente</label>
+                        <select id="select-ambiente">
+                            <option value="Biblioteca">Biblioteca</option>
+                            <option value="Sala 01">Sala 01</option>
+                            <option value="Sala de Reunião">Sala de Reunião</option>
+                            <option value="Laboratório">Laboratório</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Motivo da reserva</label>
+                        <input type="text" id="motivo" placeholder="Ex: Aula de Redes">
+                    </div>
+                    <div class="form-group">
+                        <label>Data e Hora de Início</label>
+                        <input type="datetime-local" id="data-inicio">
+                    </div>
+                    <div class="form-group">
+                        <label>Data e Hora de Término</label>
+                        <input type="datetime-local" id="data-fim">
+                    </div>
+                    <button class="btn-primary full-width" onclick="salvarReserva()">Agendar</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="lista" class="view" style="display:none;">
+            <h1>Lista de Reserva</h1>
+            <div class="table-container">
+                <table id="tabela-reservas">
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Ambiente</th>
+                            <th>Data/horário</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+    <div id="modalInformacao" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitulo">Ambiente</h2>
+        </div>
+        <div class="modal-body">
+            <h3>Informações do Ambiente</h3>
+            <ul id="listaInfo">
+                </ul>
+            <h3>Recursos Disponíveis</h3>
+            <ul id="listaRecursos">
+                </ul>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-ok" onclick="fecharModal()">OK</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>
