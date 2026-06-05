@@ -32,9 +32,12 @@
     </li>
 </ul>
 </nav>
-
+    
     <main class="content">
-        
+        <button class="btn-entrar-topo" id="btn-status-usuario" onclick="abrirModalLogin()">
+            <img src="imagens/icone login.png" class="nav-icon"> 
+            <span id="texto-usuario-topo">Entrar</span>
+        </button>
         <section id="home" class="view">
     <h1>Ambientes disponíveis</h1>
     
@@ -200,6 +203,49 @@
         </div>
         <div class="modal-footer">
             <button class="btn-ok" onclick="fecharModal()">OK</button>
+        </div>
+    </div>
+</div>
+<div id="modalLogin" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header" style="position: relative;">
+            <h2 id="loginModalTitulo">Entrar no Sistema</h2>
+            <span class="close-modal" onclick="fecharModalLogin()">&times;</span>
+        </div>
+        
+        <div class="modal-body">
+            <div id="tela-login-direto">
+                <div class="form-group">
+                    <label>Número do WhatsApp</label>
+                    <input type="text" id="login-whatsapp" placeholder="(98) 99999-9999">
+                </div>
+                <button class="btn-primary" style="width: 100%; padding: 12px; margin-bottom: 15px;" onclick="realizarLogin()">Entrar</button>
+                <p style="text-align: center; color: #666; font-size: 0.9rem;">
+                    Não tem cadastro? <a href="#" onclick="alternarAbasLogin('cadastro')" style="color: var(--primary-blue); font-weight: bold; text-decoration: none;">Cadastre-se aqui</a>
+                </p>
+            </div>
+
+            <div id="tela-cadastro" style="display: none;">
+                <div class="form-group">
+                    <label>Nome completo</label>
+                    <input type="text" id="cad-nome" placeholder="Ex: Christian G Silva">
+                </div>
+                <div class="form-group">
+                    <label>Número do WhatsApp</label>
+                    <input type="text" id="cad-whatsapp" placeholder="(98) 99999-9999">
+                </div>
+                <div class="form-group">
+                    <label>Registrar como:</label>
+                    <select id="cad-tipo">
+                        <option value="Aluno">Aluno</option>
+                        <option value="Professor">Professor</option>
+                    </select>
+                </div>
+                <button class="btn-primary" style="width: 100%; padding: 12px; margin-bottom: 15px;" onclick="realizarCadastro()">Salvar e Entrar</button>
+                <p style="text-align: center; color: #666; font-size: 0.9rem;">
+                    Já é cadastrado? <a href="#" onclick="alternarAbasLogin('login')" style="color: var(--primary-blue); font-weight: bold; text-decoration: none;">Faça Login</a>
+                </p>
+            </div>
         </div>
     </div>
 </div>

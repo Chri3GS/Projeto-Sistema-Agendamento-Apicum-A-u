@@ -137,7 +137,27 @@ button {
     border-radius: 12px;
     max-width: 500px;
 }
+/* ==========================================
+   BOTÃO DE FECHAR DO MODAL (X)
+   ========================================== */
+.close-modal {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 13px;
+    color: white;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    line-height: 1;
+}
 
+.close-modal:hover {
+    color: #cbd5e1; /* Muda para um cinza claro ao passar o mouse */
+    transform: translateY(-50%) scale(1.3); /* Dá um leve zoom no hover */
+}
 .header-reserva {
     width: 100%;
     height: 180px; 
@@ -316,6 +336,42 @@ th { background: var(--primary-blue); color: white; }
 
 .modal-body li { margin-bottom: 5px; }
 
+/* ==========================================
+   BOTÃO ENTRAR PADRÃO (COMPUTADOR)
+   ========================================== */
+.btn-entrar-topo {
+    position: absolute;
+    right: 40px;      
+    top: 40px;        
+    
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    
+    background: #0e3da3;
+    border: 1px solid #ddd;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn-entrar-topo:hover {
+    background-color: hsl(210, 97%, 56%);
+    border-color: #ccc;
+}
+
+.btn-entrar-topo span {
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.btn-entrar-topo .nav-icon {
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 !important;
+}
+
 .modal-footer {
     padding: 20px;
     text-align: center;
@@ -329,11 +385,8 @@ th { background: var(--primary-blue); color: white; }
     padding: 12px 50px;
     border-radius: 12px;
     font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(10, 53, 110, 0.3); 
-}
-
-/* ==========================================
+    cursor: pointer;}
+    /* ==========================================
    RESPONSIVIDADE E MEDIA QUERIES
    ========================================== */
 
@@ -363,7 +416,12 @@ th { background: var(--primary-blue); color: white; }
     display: none; 
 }
 
-/* --- CELULARES (ATUALIZADO!) --- */
+/* ==========================================
+   CELULARES (CORRIGIDO)
+   ========================================== */
+/* ==========================================
+   CELULARES (BARRA MAIOR E BOTÃO COMPACTO)
+   ========================================== */
 @media (max-width: 768px) {
     .sidebar {
         width: 100%;
@@ -372,57 +430,91 @@ th { background: var(--primary-blue); color: white; }
         top: 0;
         left: 0;
         z-index: 1000;
-        padding-top: 0;
     }
 
+    /* 1. HAMBÚRGUER À ESQUERDA - Alinhado no novo centro */
     .menu-toggle {
-        display: flex;
+        display: flex !important;
         flex-direction: column;
-        gap: 5px;          /* Espaçamento perfeito entre as 3 linhas */
+        gap: 5px;
         cursor: pointer;
         position: absolute;
-        
-        right: 40px;       /* Distância da parede direita */
-        top: 40px;         /* FIXO: Alinha perfeitamente com a logo lá em cima */
-        
-        transform: none;   /* Remove o alinhamento dinâmico que fazia ele descer */
+        left: 20px;        
+        right: auto;       
+        top: 55px; /* Ajustado para o novo centro da barra de 110px */
+        transform: translateY(-50%);
         z-index: 1100;
+        margin-left: 15px;
     }
 
     .menu-toggle span {
         display: block;
-        width: 35px;
+        width: 28px;       
         height: 4px;
         background-color: white;
-        border-radius: 4px;
+        border-radius: 2px;
     }
 
+    /* 2. LOGO CENTRALIZADA E BARRA AZUL MAIOR */
     .logo {
         display: flex;
         flex-direction: row;
-        
-        /* Centraliza perfeitamente a logo no meio da tela */
         justify-content: center; 
         align-items: center;
-        
-        /* Aumentamos o padding vertical de 20px para 30px para a barra azul crescer */
-        padding: 30px 0; 
-        
+        padding: 0; 
         border-bottom: none;
         width: 100%;
         
-        /* Definimos uma altura fixa maior para sustentar o topo imponente */
-        height: 120px; 
+        /* AUMENTADO: De 90px para 110px para dar mais espaço vertical */
+        height: 110px;       
     }
 
     .logo img {
-        /* Logo mantida com excelente visibilidade */
-        max-width: 185px; 
+        max-width: 130px; /* Reduzido levemente para dar mais margem nas laterais */
         height: auto;
     }
 
+    /* 3. BOTÃO ENTRAR COMPACTO À DIREITA */
+    .btn-entrar-topo {
+        display: flex !important; 
+        position: absolute;
+        right: 15px; /* Um pouco mais perto da borda para ganhar espaço */
+        left: auto;
+        top: 55px; /* Alinhado no novo centro da barra */
+        transform: translateY(-50%); 
+        
+        background: transparent !important;
+        border: 2px solid white !important; 
+        padding: 6px 10px !important; /* Padding lateral menor para encolher o botão */
+        border-radius: 20px !important;    
+        z-index: 1100;
+        
+        /* CORREÇÃO CRUCIAL: Limita a largura máxima do botão no celular */
+        max-width: 125px;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    .btn-entrar-topo span {
+        color: #ffffff !important;
+        font-weight: bold !important;
+        font-size: 0.75rem !important; /* Letra um pouco menor para caber perfeitamente */
+        text-transform: uppercase; 
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis; /* Se o texto for grande, ele coloca '...' no nome e mostra o resto */
+    }
+
+    .btn-entrar-topo .nav-icon {
+        width: 14px !important;
+        height: 14px !important;
+        margin: 0 !important;
+        filter: brightness(0) invert(1) !important; 
+    }
+
+    /* LINKS DO MENU */
     .nav-links {
-        display: none; 
+        display: none !important; 
         flex-direction: column;
         width: 100%;
         background-color: var(--primary-blue);
@@ -430,19 +522,25 @@ th { background: var(--primary-blue); color: white; }
     }
 
     .sidebar.active .nav-links {
-        display: flex;
+        display: flex !important;
     }
 
+    /* ÁREA DE CONTEÚDO REAJUSTADA */
     .content {
-        margin-left: 0;
-        padding: 20px;
+        margin-left: 0 !important;
+        padding: 20px !important;
         
-        /* Aumentamos para 170px para compensar a barra azul que ficou mais alta */
-        padding-top: 170px; 
+        /* Aumentado para 140px para compensar a barra que cresceu */
+        padding-top: 140px !important; 
+        width: 100% !important;
     }
 
     .grid-ambientes {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
+    }
+
+    .card {
+        width: 100% !important;
     }
 
     .atendimento-container {
