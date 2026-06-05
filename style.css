@@ -378,17 +378,15 @@ th { background: var(--primary-blue); color: white; }
     .menu-toggle {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 5px;          /* Espaçamento perfeito entre as 3 linhas */
         cursor: pointer;
         position: absolute;
         
-        /* Afasta o hambúrguer da parede direita para dentro */
-        right: 45px; 
+        right: 40px;       /* Distância da parede direita */
+        top: 40px;         /* FIXO: Alinha perfeitamente com a logo lá em cima */
         
-        /* Centraliza perfeitamente em relação à nova altura da barra */
-        top: 50%;
-        transform: translateY(-50%);
-        z-index: 1100; 
+        transform: none;   /* Remove o alinhamento dinâmico que fazia ele descer */
+        z-index: 1100;
     }
 
     .menu-toggle span {
