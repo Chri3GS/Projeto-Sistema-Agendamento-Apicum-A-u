@@ -15,7 +15,6 @@
 body {
     display: flex;
     min-height: 100vh;
-    /* Configurações de Fundo Corretas aqui no Body */
     background-image: url('imagens/fundo.png'); 
     background-size: cover;
     background-position: center;
@@ -24,47 +23,34 @@ body {
     background-color: var(--bg-light);
 }
 
-/* Sidebar Responsiva */
+/* ==========================================
+   SIDEBAR (COMPUTADOR)
+   ========================================== */
 .sidebar {
     width: 260px;
     background-color: var(--primary-blue);
     color: white;
     height: 100vh;
     position: fixed;
+    z-index: 1000;
 }
 
-.header-reserva {
-    width: 100%;
-    height: 180px; /* Altura da foto na tela de reserva */
-    overflow: hidden;
-    border-radius: 12px;
-    margin-bottom: 20px;
-}
-
-#img-ambiente-reserva {
-    width: 100%;
-    height: 100%;
-    object-fit: cover; /* Faz a foto preencher sem distorcer */
-    transition: 0.3s; /* Efeito suave na troca */
-}
 .logo {
     padding: 20px;
     font-weight: bold;
     font-size: 1.2rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    
-    /* Novos alinhamentos para a imagem e o texto */
     display: flex;
-    flex-direction: column; /* Deixa a imagem em cima e a letra 'C' embaixo, se quiser manter ambos */
-    align-items: center;    /* Centraliza tudo na barra lateral */
-    gap: 10px;              /* Dá um espaço entre a imagem e o texto */
+    flex-direction: column; 
+    align-items: center;    
+    gap: 10px;              
     text-align: center;
 }
 
 .logo img {
-    width: 100%;           /* Faz a imagem ocupar no máximo a largura interna da sidebar */
-    max-width: 250px;      /* Define um tamanho limite para não ficar gigante (ajuste esse valor se quiser menor/maior) */
-    height: auto;          /* Mantém a proporção da foto para não amassar */
+    width: 100%;           
+    max-width: 250px;      
+    height: auto;          
     object-fit: contain;
     display: block;
 }
@@ -76,7 +62,7 @@ body {
 
 .nav-links li {
     display: flex;
-    align-items: center; /* Centraliza o ícone e o texto verticalmente */
+    align-items: center; 
     padding: 15px 25px;
     cursor: pointer;
     transition: 0.3s;
@@ -87,7 +73,17 @@ body {
     border-left: 4px solid #fff;
 }
 
-/* Conteúdo Principal */
+.nav-icon {
+    width: 24px;      
+    height: 24px;     
+    object-fit: contain; 
+    margin-right: 12px; 
+    vertical-align: middle; 
+}
+
+/* ==========================================
+   CONTEÚDO E GRID
+   ========================================== */
 .content {
     margin-left: 260px;
     padding: 40px;
@@ -96,10 +92,9 @@ body {
 
 h1 { color: var(--text-dark); margin-bottom: 30px; }
 
-/* Grid de Ambientes */
 .grid-ambientes {
     display: grid;
-    grid-template-columns: repeat(3, 1fr); /* 3 colunas iguais */
+    grid-template-columns: repeat(3, 1fr); 
     gap: 25px;
     width: 100%;
 }
@@ -112,7 +107,7 @@ h1 { color: var(--text-dark); margin-bottom: 30px; }
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
-    min-width: 0; /* Ajuda no cálculo do grid */
+    min-width: 0; 
     width: 100%;
 }
 
@@ -133,12 +128,29 @@ button {
 .btn-primary { background: var(--primary-blue); color: white; flex: 1; }
 .btn-info { background: #e2e8f0; color: var(--text-dark); flex: 1; }
 
-/* Formulário e Tabela */
+/* ==========================================
+   RESERVA
+   ========================================== */
 .reserva-container {
     background: white;
     padding: 30px;
     border-radius: 12px;
     max-width: 500px;
+}
+
+.header-reserva {
+    width: 100%;
+    height: 180px; 
+    overflow: hidden;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+#img-ambiente-reserva {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; 
+    transition: 0.3s; 
 }
 
 .form-group { margin-bottom: 20px; }
@@ -147,6 +159,9 @@ button {
     width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px;
 }
 
+/* ==========================================
+   TABELAS
+   ========================================== */
 .table-container {
     background: white;
     border-radius: 12px;
@@ -158,124 +173,108 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 th, td { padding: 15px; text-align: left; border-bottom: 1px solid #edf2f7; }
 th { background: var(--primary-blue); color: white; }
 
-.nav-icon {
-    width: 24px;      /* Largura do ícone */
-    height: 24px;     /* Altura do ícone */
-    object-fit: contain; /* Garante que a imagem não amasse */
-    margin-right: 12px; /* Espaço entre a imagem e o texto */
-    vertical-align: middle; /* Ajuda a alinhar com a base do texto */
-}
-@media (max-width: 1024px) {
-    .grid-ambientes {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-/* --- CONFIGURAÇÃO PADRÃO (COMPUTADOR) --- */
-.menu-toggle {
-    display: none; /* Escondido no PC */
-}
-
-/* --- CONFIGURAÇÃO PARA CELULAR (ATÉ 768px) --- */
-@media (max-width: 768px) {
-    .sidebar {
-        width: 100%;
-        height: auto;
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 1000;
-        padding-top: 0;
-    }
-
-    .menu-toggle {
+/* ==========================================
+   ATENDIMENTO (FALAR COM O CT)
+   ========================================== */
+.atendimento-container {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    cursor: pointer;
-    position: absolute;
-    right: 40px; 
-    
-    /* Mude de 'top: 50%' para um valor fixo */
-    /* Isso garante que ele não 'caia' quando o menu expandir */
-    top: 45px; 
-    
-    /* Remova o transform antigo se ele estiver lá */
-    transform: none; 
-    z-index: 1100; /* Garante que ele fique por cima de tudo */
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
 }
 
-    .menu-toggle span {
-        display: block;
-        width: 35px;
-        height: 4px;
-        background-color: white;
-        border-radius: 4px;
-    }
-
-    .logo {
-        display: flex;
-        flex-direction: row;
-        
-        /* AQUI: Mudamos para center para a logo ficar no meio da barra */
-        justify-content: center; 
-        
-        align-items: center;
-        padding: 20px 0; /* Ajuste no respiro vertical */
-        border-bottom: none;
-        width: 100%;
-    }
-
-    .logo img {
-        max-width: 180px; /* Ajuste o tamanho conforme sua preferência */
-        height: auto;
-    }
-
-    /* O restante continua igual para o menu funcionar */
-    .nav-links {
-        display: none; 
-        flex-direction: column;
-        width: 100%;
-        background-color: var(--primary-blue);
-        padding-bottom: 20px;
-    }
-
-    .sidebar.active .nav-links {
-        display: flex;
-    }
-
-    .content {
-        margin-left: 0;
-        padding: 20px;
-        padding-top: 140px;
-    }
-
-    .grid-ambientes {
-        grid-template-columns: 1fr;
-    }
+.atendimento-card {
+    background-color: white;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 25px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    text-align: center;
 }
-/* Fundo escurecido atrás do modal */
+
+.atendimento-header {
+    background-color: var(--primary-blue);
+    color: white;
+    padding: 25px;
+    display: flex;
+    justify-content: center;
+    align-items: center; 
+    gap: 12px;
+}
+
+.icon-atendimento {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-atendimento img {
+    width: 35px;        
+    height: 35px;       
+    object-fit: contain; 
+    display: block;
+}
+
+.atendimento-header h2 { font-size: 1.8rem; font-weight: 600; }
+.atendimento-body { padding: 40px 30px; }
+
+.atendimento-logo img {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 25px;
+}
+
+.atendimento-texto {
+    color: #444;
+    font-size: 1rem;
+    line-height: 1.4;
+    margin-bottom: 30px;
+    padding: 0 10px;
+}
+
+.btn-whatsapp {
+    display: block;
+    background-color: var(--primary-blue);
+    color: white;
+    text-decoration: none;
+    padding: 15px;
+    border-radius: 15px;
+    font-weight: bold;
+    font-size: 1.1rem;
+    transition: 0.3s;
+    margin-bottom: 30px;
+}
+
+.btn-whatsapp:hover {
+    background-color: var(--hover-blue);
+    transform: scale(1.02);
+}
+
+.atendimento-horario p { color: #666; font-size: 0.9rem; margin-bottom: 5px; }
+.atendimento-horario strong { color: #333; font-size: 1rem; }
+
+/* ==========================================
+   MODAL
+   ========================================== */
 .modal {
-    display: none; /* Escondido por padrão */
+    display: none; 
     position: fixed;
     z-index: 2000;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.6); /* Efeito de sombra no fundo */
+    background-color: rgba(0, 0, 0, 0.6); 
     align-items: center;
     justify-content: center;
 }
 
-/* Caixa do Modal */
 .modal-content {
     background-color: #fff;
-    /* Adicione sua imagem de fundo aqui para cobrir tudo */
     background-image: url('imagens/fundo-modal.png'); 
     background-size: cover;
     background-position: center;
-    
     width: 90%;
     max-width: 400px;
     border-radius: 20px;
@@ -294,13 +293,12 @@ th { background: var(--primary-blue); color: white; }
     background-color: #1a73e8; 
     color: white;
     padding: 25px;
-    text-align: cente
-    r;
+    text-align: center;
 }
 
 .modal-body {
     padding: 20px 30px;
-    background: transparent; /* Garante que o fundo do pai apareça */
+    background: transparent; 
 }
 
 .modal-body h3 {
@@ -316,9 +314,7 @@ th { background: var(--primary-blue); color: white; }
     color: #444;
 }
 
-.modal-body li {
-    margin-bottom: 5px;
-}
+.modal-body li { margin-bottom: 5px; }
 
 .modal-footer {
     padding: 20px;
@@ -334,5 +330,125 @@ th { background: var(--primary-blue); color: white; }
     border-radius: 12px;
     font-weight: bold;
     cursor: pointer;
-    box-shadow: 0 4px 10px rgba(10, 53, 110, 0.3); /* Sombra suave azul */
+    box-shadow: 0 4px 10px rgba(10, 53, 110, 0.3); 
+}
+
+/* ==========================================
+   RESPONSIVIDADE E MEDIA QUERIES
+   ========================================== */
+
+/* --- AMPLIAR ATENDIMENTO NO PC --- */
+@media (min-width: 769px) {
+    .atendimento-card {
+        max-width: 550px; 
+        border-radius: 30px; 
+    }
+    .atendimento-header { padding: 40px; }
+    .atendimento-header h2 { font-size: 2.2rem; }
+    .icon-atendimento img { width: 50px; height: 50px; }
+    .atendimento-logo img { width: 180px; height: 180px; }
+    .atendimento-texto { font-size: 1.3rem; margin-bottom: 40px; }
+    .btn-whatsapp { padding: 20px; font-size: 1.4rem; max-width: 80%; margin: 0 auto 40px auto; }
+}
+
+/* --- TABLETS --- */
+@media (max-width: 1024px) {
+    .grid-ambientes {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* --- CONFIGURAÇÃO PADRÃO PC --- */
+.menu-toggle {
+    display: none; 
+}
+
+/* --- CELULARES (ATUALIZADO!) --- */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+        padding-top: 0;
+    }
+
+    .menu-toggle {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        cursor: pointer;
+        position: absolute;
+        
+        /* Afasta o hambúrguer da parede direita para dentro */
+        right: 45px; 
+        
+        /* Centraliza perfeitamente em relação à nova altura da barra */
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 1100; 
+    }
+
+    .menu-toggle span {
+        display: block;
+        width: 35px;
+        height: 4px;
+        background-color: white;
+        border-radius: 4px;
+    }
+
+    .logo {
+        display: flex;
+        flex-direction: row;
+        
+        /* Centraliza perfeitamente a logo no meio da tela */
+        justify-content: center; 
+        align-items: center;
+        
+        /* Aumentamos o padding vertical de 20px para 30px para a barra azul crescer */
+        padding: 30px 0; 
+        
+        border-bottom: none;
+        width: 100%;
+        
+        /* Definimos uma altura fixa maior para sustentar o topo imponente */
+        height: 120px; 
+    }
+
+    .logo img {
+        /* Logo mantida com excelente visibilidade */
+        max-width: 185px; 
+        height: auto;
+    }
+
+    .nav-links {
+        display: none; 
+        flex-direction: column;
+        width: 100%;
+        background-color: var(--primary-blue);
+        padding-bottom: 20px;
+    }
+
+    .sidebar.active .nav-links {
+        display: flex;
+    }
+
+    .content {
+        margin-left: 0;
+        padding: 20px;
+        
+        /* Aumentamos para 170px para compensar a barra azul que ficou mais alta */
+        padding-top: 170px; 
+    }
+
+    .grid-ambientes {
+        grid-template-columns: 1fr;
+    }
+
+    .atendimento-container {
+        padding: 20px;
+        min-height: auto;
+    }
 }
