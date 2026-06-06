@@ -249,5 +249,32 @@
         </div>
     </div>
 </div>
+<script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // Suas credenciais reais extraídas do painel do seu projeto
+        const firebaseConfig = {
+            apiKey: "AIzaSyAFQb60ptkP3j26CpCBv6y6zLSEVdSrpLg",
+            authDomain: "sistema-agendamento-ct-apc.firebaseapp.com",
+            projectId: "sistema-agendamento-ct-apc",
+            storageBucket: "sistema-agendamento-ct-apc.appspot.com",
+            messagingSenderId: "871573036227",
+            appId: "1:871573036227:web:8a53a92c1fc5d2d69c9676",
+            measurementId: "G-3H7F9W4GQT"
+        };
+
+        // Inicializa o Firebase e o Banco
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Compartilha com o seu arquivo script.js externo
+        window.db = db;
+        window.firestore = { collection, addDoc, getDocs, query, orderBy };
+        
+        console.log("Servidor Cloud conectado!");
+    </script>
+
+    <script src="script.js"></script>
 </body>
 </html>

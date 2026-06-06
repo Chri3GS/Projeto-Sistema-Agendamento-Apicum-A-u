@@ -1,6 +1,6 @@
 // Banco de dados temporário de reservas (Recupera do localStorage ou inicia com o padrão)
 let reservas = JSON.parse(localStorage.getItem('reservas_salvas')) || [
-    { usuario: "João", ambiente: "Biblioteca", data: "20/06/2026 - 08:00 às 10:00" }
+    
 ];
 
 // Array de usuários cadastrados
@@ -72,10 +72,9 @@ function toggleMenu() {
 // FLUXO DE RESERVAS
 // ==========================================
 
-function salvarReserva() {
-    // SEGURANÇA: Impede agendamento se não houver ninguém logado
+async function salvarReserva() {
     if (!usuarioLogado) {
-        alert("Você precisa entrar no sistema (fazer login) antes de agendar um ambiente!");
+        alert("Você precisa entrar no sistema antes de agendar!");
         abrirModalLogin();
         return;
     }
@@ -86,31 +85,30 @@ function salvarReserva() {
     const fim = document.getElementById('data-fim').value;
 
     if (!inicio || !fim) {
-        alert("Por favor, preencha os horários de início e término!");
+        alert("Preencha os horários!");
         return;
     }
 
-    // RESOLVIDO: Captura dinamicamente o nome do usuário logado na sessão
     const novaReserva = {
         usuario: usuarioLogado.nome, 
         ambiente: ambiente,
-        data: `${formataData(inicio)} até ${formataData(fim)}`
+        data: `${formataData(inicio)} até ${formataData(fim)}`,
+        dataOrdenacao: new Date(inicio) // Importante para organizar a lista
     };
 
-    reservas.push(novaReserva);
-    
-    // Salva a lista atualizada de reservas no LocalStorage para não perder ao atualizar
-    localStorage.setItem('reservas_salvas', JSON.stringify(reservas));
-    
-    atualizarTabela();
-    
-    // Limpa os campos do formulário
-    document.getElementById('motivo').value = "";
-    document.getElementById('data-inicio').value = "";
-    document.getElementById('data-fim').value = "";
-    
-    // Redireciona para a aba da lista
-    showSection('lista');
+    try {
+        // Envia para o Firebase
+        await window.firestore.addDoc(window.firestore.collection(window.db, "reservas"), novaReserva);
+        alert("Agendamento salvo na nuvem com sucesso!");
+        
+        // Limpa campos e atualiza tela
+        document.getElementById('motivo').value = "";
+        await atualizarTabela(); 
+        showSection('lista');
+    } catch (e) {
+        console.error("Erro ao salvar: ", e);
+        alert("Erro ao conectar com o banco de dados.");
+    }
 }
 
 function formataData(dataString) {
@@ -118,21 +116,36 @@ function formataData(dataString) {
     return d.toLocaleString('pt-BR').replace(',', ' -');
 }
 
-function atualizarTabela() {
+async function atualizarTabela() {
     const tbody = document.querySelector('#tabela-reservas tbody');
     if (!tbody) return;
     
-    tbody.innerHTML = "";
+    tbody.innerHTML = "<tr><td colspan='3'>Carregando dados da nuvem...</td></tr>";
 
-    reservas.forEach(res => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${res.usuario}</strong></td>
-            <td>${res.ambiente}</td>
-            <td>${res.data}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+    try {
+        // Busca as reservas ordenadas pela data
+        const q = window.firestore.query(
+            window.firestore.collection(window.db, "reservas"), 
+            window.firestore.orderBy("dataOrdenacao", "asc")
+        );
+        
+        const querySnapshot = await window.firestore.getDocs(q);
+        tbody.innerHTML = "";
+
+        querySnapshot.forEach((doc) => {
+            const res = doc.data();
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${res.usuario}</strong></td>
+                <td>${res.ambiente}</td>
+                <td>${res.data}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error("Erro ao carregar: ", e);
+        tbody.innerHTML = "<tr><td colspan='3'>Erro ao carregar agendamentos.</td></tr>";
+    }
 }
 
 // ==========================================
