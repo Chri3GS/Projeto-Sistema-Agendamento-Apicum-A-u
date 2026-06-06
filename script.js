@@ -53,14 +53,14 @@ function trocarFotoReserva() {
     const imagem = document.getElementById('img-ambiente-reserva');
     
     const mapaFotos = {
-        "Biblioteca": "imagens/ccc.jpg", 
-        "Sala 01": "imagens/sala01.jpg",
-        "Sala 02": "imagens/sala02.jpg",
-        "Sala de Reunião": "imagens/sala_reuniao.jpg",
-        "Laboratório de Informática": "imagens/lab_info.jpg"    
+        "Biblioteca": "imagens/biblioteca.jpeg", 
+        "Sala 01": "imagens/sala01.jpeg",
+        "Sala 02": "imagens/sala02.jpeg",
+        "Sala de Reunião": "imagens/salareuniao.jpeg",
+        "Laboratório de Informática": "imagens/salainformatica.jpeg"    
     };
 
-    imagem.src = mapaFotos[ambiente] || "imagens/ccc.jpg";
+    imagem.src = mapaFotos[ambiente] || "imagens/biblioteca.jpg";
 }
 
 function toggleMenu() {
