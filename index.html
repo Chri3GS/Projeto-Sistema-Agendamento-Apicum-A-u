@@ -100,44 +100,92 @@
     </div> </section>
 
         <section id="reserva" class="view" style="display:none;">
-    <h1>Reserva do ambiente</h1>
-    <div class="reserva-container">
-        
-        <div class="header-reserva">
-            <img id="img-ambiente-reserva" src="imagens/biblioteca.jpeg" alt="Ambiente selecionado">
-        </div>
+            <div class="reserva-header-titulo">
+                <h1>Reserva de Ambientes</h1>
+                <p class="reserva-subtitulo">Consulte os horários disponíveis em tempo real e faça seu agendamento no Centro Tecnológico</p>
+            </div>
+            
+            <div class="reserva-container">
+                <!-- Coluna da Esquerda: Dados e Formulário de Reserva -->
+                <div class="coluna-form-reserva">
+                    <div class="header-reserva">
+                        <img id="img-ambiente-reserva" src="imagens/biblioteca.jpeg" alt="Ambiente selecionado">
+                        <div class="ambiente-badge" id="badge-ambiente-info">Biblioteca • Capacidade: 15 pessoas</div>
+                    </div>
 
-        <div class="form-reserva">
-            <div class="form-group">
-                <label>Ambiente</label>
-                <select id="select-ambiente" onchange="trocarFotoReserva()">
-                    <option value="Biblioteca">Biblioteca</option>
-                    <option value="Sala 01">Sala 01</option>
-                    <option value="Sala 02">Sala 02</option>
-                    <option value="Sala de Reunião">Sala de Reunião</option>
-                    <option value="Laboratório de Informática">Laboratório de Informática</option>
-                </select>
+                    <div class="form-reserva">
+                        <div class="form-group">
+                            <label for="select-ambiente">Ambiente</label>
+                            <select id="select-ambiente" onchange="aoMudarAmbiente()">
+                                <option value="Biblioteca">Biblioteca</option>
+                                <option value="Sala 01">Sala 01</option>
+                                <option value="Sala 02">Sala 02</option>
+                                <option value="Sala de Reunião">Sala de Reunião</option>
+                                <option value="Laboratório de Informática">Laboratório de Informática</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="data-reserva">Data da Reserva</label>
+                            <input type="date" id="data-reserva" onchange="aoMudarData()">
+                        </div>
+
+                        <div class="form-row-horarios">
+                            <div class="form-group">
+                                <label for="hora-inicio">Início (08:00 - 18:00)</label>
+                                <input type="time" id="hora-inicio" min="08:00" max="17:30" step="1800" onchange="aoMudarHorarioManual()">
+                            </div>
+                            <div class="form-group">
+                                <label for="hora-fim">Término (08:00 - 18:00)</label>
+                                <input type="time" id="hora-fim" min="08:30" max="18:00" step="1800" onchange="aoMudarHorarioManual()">
+                            </div>
+                        </div>
+
+                        <!-- Inputs legados mantidos ocultos para compatibilidade integral de IDs -->
+                        <input type="hidden" id="data-inicio">
+                        <input type="hidden" id="data-fim">
+
+                        <div class="form-group">
+                            <label for="motivo">Motivo da reserva</label>
+                            <input type="text" id="motivo" placeholder="Ex: Aula de Redes, Grupo de Estudos">
+                        </div>
+
+                        <div id="alerta-reserva" class="alerta-reserva" style="display: none;"></div>
+                        
+                        <button class="btn-primary full-width" id="btn-agendar-reserva" onclick="salvarReserva()">Agendar Ambiente</button>
+                    </div>
+                </div>
+
+                <!-- Coluna da Direita: Grade Dinâmica de Disponibilidade de Horários e Turnos -->
+                <div class="coluna-grade-reserva">
+                    <div class="painel-disponibilidade">
+                        <div class="painel-header">
+                            <div>
+                                <h2 id="titulo-grade-disponibilidade">Disponibilidade do Ambiente</h2>
+                                <span class="data-grade-destaque" id="texto-data-selecionada">Selecione uma data</span>
+                            </div>
+                            <div class="horario-expediente-chip">
+                                <span>🕒 Expediente: 08h às 18h</span>
+                            </div>
+                        </div>
+
+                        <div class="legenda-horarios">
+                            <span class="legenda-item"><span class="cor-indicador disponivel"></span> Disponível</span>
+                            <span class="legenda-item"><span class="cor-indicador ocupado"></span> Ocupado</span>
+                            <span class="legenda-item"><span class="cor-indicador selecionado"></span> Selecionado</span>
+                        </div>
+
+                        <div class="info-dica-grade">
+                            💡 <em>Clique em qualquer horário disponível para preencher o início e término automaticamente.</em>
+                        </div>
+
+                        <div id="container-grade-turnos" class="container-grade-turnos">
+                            <div class="grade-loading">Carregando horários em tempo real...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <div class="form-group">
-                <label>Motivo da reserva</label>
-                <input type="text" id="motivo" placeholder="Ex: Aula de Redes">
-            </div>
-            
-            <div class="form-group">
-                <label>Data e Hora de Início</label>
-                <input type="datetime-local" id="data-inicio">
-            </div>
-            
-            <div class="form-group">
-                <label>Data e Hora de Término</label>
-                <input type="datetime-local" id="data-fim">
-            </div>
-            
-            <button class="btn-primary full-width" onclick="salvarReserva()">Agendar</button>
-        </div>
-    </div>
-</section>
+        </section>
 
         <section id="lista" class="view" style="display:none;">
             <h1>Lista de Reserva</h1>
@@ -187,7 +235,6 @@
     </section>
     </main>
 
-    <script src="script.js"></script>
     <div id="modalInformacao" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -246,6 +293,27 @@
                     Já é cadastrado? <a href="#" onclick="alternarAbasLogin('login')" style="color: var(--primary-blue); font-weight: bold; text-decoration: none;">Faça Login</a>
                 </p>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Feedback de Confirmação de Agendamento -->
+<div id="modalConfirmacaoReserva" class="modal">
+    <div class="modal-content modal-confirmacao-content">
+        <div class="modal-header modal-header-sucesso">
+            <div class="icone-sucesso-circulo">✓</div>
+            <h2>Agendamento Realizado!</h2>
+            <span class="close-modal" onclick="fecharModalConfirmacao()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p class="msg-sucesso-resumo">Seu agendamento foi salvo com sucesso no sistema.</p>
+            <div class="resumo-reserva-card" id="resumo-reserva-detalhes">
+                <!-- Detalhes preenchidos dinamicamente pelo script.js -->
+            </div>
+        </div>
+        <div class="modal-footer modal-footer-botoes">
+            <button class="btn-info" onclick="fecharModalConfirmacao()">Novo Agendamento</button>
+            <button class="btn-primary" onclick="irParaListaReservas()">Ver na Lista</button>
         </div>
     </div>
 </div>

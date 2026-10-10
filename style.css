@@ -129,165 +129,526 @@ button {
 .btn-info { background: #e2e8f0; color: var(--text-dark); flex: 1; }
 
 /* ==========================================
-   RESERVA
+   RESERVA DE AMBIENTES
    ========================================== */
 
-
-/* Seção que abraça tudo */
 #reserva {
     width: 100%;
     display: flex;
     flex-direction: column;
-    align-items: flex-start; /* Alinha o título à esquerda no PC */
+    align-items: flex-start;
+}
+
+.reserva-header-titulo {
+    margin-bottom: 20px;
 }
 
 #reserva h1 {
     color: var(--text-dark);
-    margin-bottom: 25px;
+    margin-bottom: 6px;
     font-size: 2rem;
     font-weight: 700;
 }
 
-/* O card branco agora é largo e usa Grid no computador */
-.reserva-container {
-    background: white;
-    padding: 35px;
-    border-radius: 16px;
-    width: 100%;
-    max-width: 1050px; /* Aumentado para preencher a tela do PC com elegância */
-    margin-top: 10px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
-    
-    /* Configuração de duas colunas */
-    display: grid;
-    grid-template-columns: 1.2fr 1fr; /* Foto na esquerda (maior) e form na direita */
-    gap: 40px; /* Espaçamento generoso entre a foto e os campos */
-    align-items: center;
+.reserva-subtitulo {
+    color: #64748b;
+    font-size: 0.95rem;
 }
 
-/* Coluna da Esquerda: Caixa da Foto */
+/* Container Principal em Duas Colunas (Formulário + Grade de Horários) */
+.reserva-container {
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 1180px;
+    margin-top: 5px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
+    gap: 32px;
+    align-items: start;
+}
+
+/* Coluna 1: Formulário e Imagem */
+.coluna-form-reserva {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
 .header-reserva {
     width: 100%;
-    height: 100%;
-    min-height: 400px; /* Foto grande e destacada no computador */
+    height: 220px;
     overflow: hidden;
     border-radius: 12px;
-    margin-bottom: 0; /* Remove a margem antiga que jogava o form pra baixo */
+    position: relative;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
 }
 
 #img-ambiente-reserva {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.5s ease;
+    transition: transform 0.4s ease;
 }
 
-.reserva-container:hover #img-ambiente-reserva {
-    transform: scale(1.03); /* Leve efeito de zoom ao passar o mouse no card */
+.header-reserva:hover #img-ambiente-reserva {
+    transform: scale(1.04);
 }
 
-/* Coluna da Direita: O Formulário */
-.reserva-container form {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+.ambiente-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(14, 61, 163, 0.88);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.form-reserva {
     width: 100%;
 }
 
 .form-group {
-    margin-bottom: 18px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-weight: 600;
     color: #475569;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
 }
 
-.form-group input, .form-group select {
+.form-group input, 
+.form-group select {
     width: 100%;
-    padding: 12px 16px;
+    padding: 11px 14px;
     border: 1.5px solid #cbd5e1;
     border-radius: 8px;
-    font-size: 1rem;
+    font-size: 0.95rem;
     color: var(--text-dark);
     transition: 0.2s;
     background-color: #f8fafc;
 }
 
-/* Efeito de foco profissional nos inputs */
-.form-group input:focus, .form-group select:focus {
+.form-group input:focus, 
+.form-group select:focus {
     outline: none;
     border-color: var(--primary-blue);
     background-color: #fff;
-    box-shadow: 0 0 0 3px rgba(14, 61, 163, 0.1);
+    box-shadow: 0 0 0 3px rgba(14, 61, 163, 0.12);
 }
 
-/* Botão Agendar ocupando a largura total da sua coluna */
-/* ==========================================
-   BOTÃO AGENDAR ULTRA FORTE (CORRIGIDO)
-   ========================================== */
-#reserva .reserva-container button.btn-primary,
-#reserva form button.btn-primary {
-    margin-top: 15px !important;
-    padding: 16px 20px !important;  /* Força o aumento do tamanho vertical e horizontal */
-    font-size: 1.15rem !important;  /* Força a letra a ficar maior */
+.form-row-horarios {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* Banner de Alerta e Conflitos */
+.alerta-reserva {
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    margin-bottom: 16px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: fadeInAlerta 0.25s ease-out;
+}
+
+@keyframes fadeInAlerta {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.alerta-reserva.erro {
+    background-color: #fef2f2;
+    border: 1.5px solid #f87171;
+    color: #991b1b;
+}
+
+.alerta-reserva.aviso {
+    background-color: #fffbeb;
+    border: 1.5px solid #fcd34d;
+    color: #92400e;
+}
+
+.alerta-reserva.sucesso {
+    background-color: #f0fdf4;
+    border: 1.5px solid #86efac;
+    color: #166534;
+}
+
+/* Botão de Agendar */
+#reserva .btn-primary.full-width {
+    margin-top: 10px !important;
+    padding: 15px 20px !important;
+    font-size: 1.05rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.5px !important;
     text-transform: uppercase !important;
-    
-    background: #0e3da3 !important; /* Usa o seu azul padrão */
+    background: #0e3da3 !important;
     color: white !important;
     border: none !important;
     border-radius: 8px !important;
     width: 100% !important;
-    display: block !important;
     cursor: pointer !important;
-    
     transition: background-color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease !important;
-    box-shadow: 0 4px 6px rgba(14, 61, 163, 0.15) !important;
+    box-shadow: 0 4px 6px rgba(14, 61, 163, 0.18) !important;
 }
 
-/* Garante que o efeito de passar o mouse funcione sobrepondo tudo */
-#reserva .reserva-container button.btn-primary:hover,
-#reserva form button.btn-primary:hover {
-    background-color: #184bc7 !important; /* Azul hover */
+#reserva .btn-primary.full-width:hover {
+    background-color: #184bc7 !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 8px 15px rgba(24, 75, 199, 0.3) !important;
+    box-shadow: 0 6px 14px rgba(24, 75, 199, 0.3) !important;
 }
 
-#reserva .reserva-container button.btn-primary:active,
-#reserva form button.btn-primary:active {
+#reserva .btn-primary.full-width:active {
     transform: translateY(0) !important;
-    box-shadow: 0 4px 6px rgba(14, 61, 163, 0.15) !important;
 }
+
 /* ==========================================
-   ADAPTAÇÃO AUTOMÁTICA PARA CELULAR (RESPONSIVO)
+   PAINEL DE DISPONIBILIDADE (GRADE DINÂMICA)
    ========================================== */
-@media (max-width: 768px) {
-    #reserva {
-        align-items: center; /* Volta a centralizar o título no mobile */
-    }
-    
-    #reserva h1 {
-        font-size: 1.6rem;
-        text-align: center;
-    }
-
-    .reserva-container {
-        grid-template-columns: 1fr; /* Desfaz as duas colunas e deixa uma em cima da outra */
-        gap: 20px;
-        padding: 20px;
-        max-width: 500px;
-    }
-
-    .header-reserva {
-        min-height: 200px;
-        height: 200px; /* Foto menor e horizontal para caber no celular */
-    }
+.coluna-grade-reserva {
+    width: 100%;
 }
+
+.painel-disponibilidade {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 22px;
+}
+
+.painel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 14px;
+}
+
+#titulo-grade-disponibilidade {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--primary-blue);
+    margin-bottom: 2px;
+}
+
+.data-grade-destaque {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.horario-expediente-chip {
+    background: #e0e7ff;
+    color: var(--primary-blue);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+}
+
+.legenda-horarios {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 0.83rem;
+    color: #475569;
+    flex-wrap: wrap;
+}
+
+.legenda-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.cor-indicador {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.cor-indicador.disponivel { background: #22c55e; }
+.cor-indicador.ocupado { background: #ef4444; }
+.cor-indicador.selecionado { background: #0e3da3; }
+
+.info-dica-grade {
+    font-size: 0.8rem;
+    color: #64748b;
+    background: #ffffff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-left: 3px solid var(--primary-blue);
+    margin-bottom: 18px;
+}
+
+.container-grade-turnos {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.grade-loading {
+    padding: 30px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+.bloco-turno {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.titulo-turno {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.badge-turno-horario {
+    font-size: 0.78rem;
+    color: #64748b;
+    font-weight: 500;
+    background: #f1f5f9;
+    padding: 3px 8px;
+    border-radius: 12px;
+}
+
+.grid-slots {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+/* Cards Interativos de Horário */
+.slot-btn {
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+    transition: all 0.2s ease;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    background: #ffffff;
+}
+
+.slot-hora {
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
+.slot-status {
+    font-size: 0.74rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.slot-tag {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* Estados dos slots */
+.slot-btn.disponivel {
+    border-color: #86efac;
+    background-color: #f0fdf4;
+    color: #166534;
+}
+
+.slot-btn.disponivel:hover {
+    border-color: #22c55e;
+    background-color: #dcfce7;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(34, 197, 94, 0.15);
+}
+
+.slot-btn.disponivel .slot-tag {
+    background-color: #22c55e;
+    color: white;
+}
+
+.slot-btn.ocupado {
+    border-color: #fca5a5;
+    background-color: #fef2f2;
+    color: #991b1b;
+    cursor: not-allowed;
+    opacity: 0.88;
+}
+
+.slot-btn.ocupado .slot-tag {
+    background-color: #ef4444;
+    color: white;
+}
+
+.slot-btn.passado {
+    border-color: #e2e8f0;
+    background-color: #f1f5f9;
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.slot-btn.passado .slot-tag {
+    background-color: #cbd5e1;
+    color: #475569;
+}
+
+.slot-btn.selecionado {
+    border-color: var(--primary-blue) !important;
+    background-color: #eff6ff !important;
+    color: var(--primary-blue) !important;
+    font-weight: 700 !important;
+    box-shadow: 0 0 0 2px rgba(14, 61, 163, 0.25) !important;
+    transform: translateY(-1px);
+}
+
+.slot-btn.selecionado .slot-tag {
+    background-color: var(--primary-blue);
+    color: white;
+}
+
+/* ==========================================
+   MODAL DE FEEDBACK DE CONFIRMAÇÃO
+   ========================================== */
+.modal-confirmacao-content {
+    max-width: 460px;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.modal-header-sucesso {
+    background: linear-gradient(135deg, #0e3da3 0%, #1a73e8 100%);
+    color: white;
+    padding: 30px 20px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+}
+
+.icone-sucesso-circulo {
+    width: 58px;
+    height: 58px;
+    background-color: #22c55e;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);
+    animation: popIn 0.35s ease-out;
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.4); opacity: 0; }
+    70% { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.modal-header-sucesso h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+}
+
+.msg-sucesso-resumo {
+    color: #64748b;
+    font-size: 0.95rem;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.resumo-reserva-card {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-size: 0.92rem;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: #334155;
+}
+
+.resumo-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed #e2e8f0;
+    padding-bottom: 6px;
+}
+
+.resumo-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.resumo-item span {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.resumo-item strong {
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+.modal-footer-botoes {
+    display: flex;
+    gap: 12px;
+    padding: 16px 24px 24px;
+    background: white;
+}
+
+.modal-footer-botoes .btn-info,
+.modal-footer-botoes .btn-primary {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
 /* ==========================================
    BOTÃO DE FECHAR DO MODAL (X)
    ========================================== */
@@ -306,28 +667,8 @@ button {
 }
 
 .close-modal:hover {
-    color: #cbd5e1; /* Muda para um cinza claro ao passar o mouse */
-    transform: translateY(-50%) scale(1.3); /* Dá um leve zoom no hover */
-}
-.header-reserva {
-    width: 100%;
-    height: 180px; 
-    overflow: hidden;
-    border-radius: 12px;
-    margin-bottom: 20px;
-}
-
-#img-ambiente-reserva {
-    width: 100%;
-    height: 100%;
-    object-fit: cover; 
-    transition: 0.3s; 
-}
-
-.form-group { margin-bottom: 20px; }
-.form-group label { display: block; margin-bottom: 8px; font-weight: 600; }
-.form-group input, .form-group select {
-    width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px;
+    color: #cbd5e1;
+    transform: translateY(-50%) scale(1.3);
 }
 
 /* ==========================================
@@ -697,5 +1038,40 @@ th { background: var(--primary-blue); color: white; }
     .atendimento-container {
         padding: 20px;
         min-height: auto;
+    }
+
+    /* Adaptação da tela de Reserva para celular */
+    #reserva {
+        align-items: center;
+    }
+
+    #reserva h1 {
+        font-size: 1.6rem;
+        text-align: center;
+    }
+
+    .reserva-subtitulo {
+        text-align: center;
+        margin-bottom: 5px;
+    }
+
+    .reserva-container {
+        grid-template-columns: 1fr !important;
+        gap: 22px !important;
+        padding: 16px !important;
+        width: 100% !important;
+    }
+
+    .header-reserva {
+        height: 180px !important;
+    }
+
+    .form-row-horarios {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .grid-slots {
+        grid-template-columns: 1fr !important;
     }
 }
