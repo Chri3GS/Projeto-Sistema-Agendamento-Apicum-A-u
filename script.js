@@ -386,6 +386,9 @@ function carregarGradeHorarios() {
 
     if (!container || !inputData || !selectAmbiente) return;
 
+    // Preserva a posição de rolagem para que a navegação não dê saltos ao clicar em um card
+    const scrollPosAnterior = container.scrollTop;
+
     const ambiente = selectAmbiente.value;
     const dataReserva = inputData.value || getHojeFormatado();
 
@@ -518,6 +521,7 @@ function carregarGradeHorarios() {
     });
 
     container.innerHTML = html;
+    container.scrollTop = scrollPosAnterior;
 }
 
 // Ao clicar em um slot livre na grade, preenche os inputs automaticamente
