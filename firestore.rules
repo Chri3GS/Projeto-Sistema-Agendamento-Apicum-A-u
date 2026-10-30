@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAs(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validUserProfile(uid) {
+      return signedInAs(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.nome is string
+        && request.resource.data.fotoURL is string
+        && request.resource.data.tipo in ['Aluno', 'Professor']
+        && request.resource.data.keys().hasAll([
+          'uid', 'nome', 'email', 'fotoURL', 'tipo', 'atualizadoEm'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'nome', 'email', 'fotoURL', 'tipo', 'criadoEm', 'atualizadoEm'
+        ]);
+    }
+
+    match /usuarios/{uid} {
+      allow read: if signedInAs(uid);
+      allow create: if validUserProfile(uid)
+        && request.resource.data.keys().hasAll(['criadoEm']);
+      allow update: if validUserProfile(uid)
+        && resource.data.uid == uid;
+      allow delete: if false;
+    }
+
+    match /reservas/{reservaId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.usuarioUid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'usuarioUid', 'usuario', 'ambiente', 'motivo', 'data', 'dataInicio',
+          'dataFim', 'dataReserva', 'horaInicio', 'horaFim', 'dataOrdenacao', 'criadoEm'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'usuarioUid', 'usuario', 'ambiente', 'motivo', 'data', 'dataInicio',
+          'dataFim', 'dataReserva', 'horaInicio', 'horaFim', 'dataOrdenacao', 'criadoEm'
+        ])
+        && request.resource.data.usuario is string
+        && request.resource.data.ambiente is string
+        && request.resource.data.motivo is string
+        && request.resource.data.data is string
+        && request.resource.data.dataInicio is string
+        && request.resource.data.dataFim is string
+        && request.resource.data.dataReserva is string
+        && request.resource.data.horaInicio is string
+        && request.resource.data.horaFim is string
+        && request.resource.data.criadoEm is string
+        && request.resource.data.dataOrdenacao is timestamp;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

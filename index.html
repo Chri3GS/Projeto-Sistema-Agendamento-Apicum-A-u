@@ -35,7 +35,8 @@
     
     <main class="content">
         <button class="btn-entrar-topo" id="btn-status-usuario" onclick="abrirModalLogin()">
-            <img src="imagens/icone login.png" class="nav-icon"> 
+            <img src="imagens/icone login.png" class="nav-icon" id="icone-login-topo" alt="">
+            <img class="avatar-usuario-topo" id="avatar-usuario-topo" alt="Foto do usuário" hidden>
             <span id="texto-usuario-topo">Entrar</span>
         </button>
         <section id="home" class="view">
@@ -263,37 +264,25 @@
         </div>
         
         <div class="modal-body">
-            <div id="tela-login-direto">
+            <div id="tela-login-google">
                 <div class="form-group">
-                    <label>Número do WhatsApp</label>
-                    <input type="text" id="login-whatsapp" placeholder="(98) 99999-9999">
-                </div>
-                <button class="btn-primary" style="width: 100%; padding: 12px; margin-bottom: 15px;" onclick="realizarLogin()">Entrar</button>
-                <p style="text-align: center; color: #666; font-size: 0.9rem;">
-                    Não tem cadastro? <a href="#" onclick="alternarAbasLogin('cadastro')" style="color: var(--primary-blue); font-weight: bold; text-decoration: none;">Cadastre-se aqui</a>
-                </p>
-            </div>
-
-            <div id="tela-cadastro" style="display: none;">
-                <div class="form-group">
-                    <label>Nome completo</label>
-                    <input type="text" id="cad-nome" placeholder="Ex: Christian G Silva">
-                </div>
-                <div class="form-group">
-                    <label>Número do WhatsApp</label>
-                    <input type="text" id="cad-whatsapp" placeholder="(98) 99999-9999">
-                </div>
-                <div class="form-group">
-                    <label>Registrar como:</label>
+                    <label for="cad-tipo">Tipo de usuário (para novos cadastros)</label>
                     <select id="cad-tipo">
                         <option value="Aluno">Aluno</option>
                         <option value="Professor">Professor</option>
                     </select>
                 </div>
-                <button class="btn-primary" style="width: 100%; padding: 12px; margin-bottom: 15px;" onclick="realizarCadastro()">Salvar e Entrar</button>
-                <p style="text-align: center; color: #666; font-size: 0.9rem;">
-                    Já é cadastrado? <a href="#" onclick="alternarAbasLogin('login')" style="color: var(--primary-blue); font-weight: bold; text-decoration: none;">Faça Login</a>
-                </p>
+                <p class="auth-tipo-ajuda">Essa escolha será salva somente no primeiro acesso.</p>
+                <button class="btn-google" id="btn-login-google" onclick="realizarLoginGoogle()">
+                    <svg class="google-icon" viewBox="0 0 48 48" aria-hidden="true">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.73 7.18l7.27 5.64c4.25-3.92 7.5-9.71 7.5-17.29z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.75-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.54 2.56 10.78l7.97-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.8l-7.27-5.64c-2.02 1.36-4.6 2.17-8.63 2.17-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                    <span>Continuar com Google</span>
+                </button>
+                <p id="auth-erro" class="auth-erro" role="alert" hidden></p>
             </div>
         </div>
     </div>
@@ -321,7 +310,8 @@
 </div>
 <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         // Suas credenciais reais extraídas do painel do seu projeto
         const firebaseConfig = {
@@ -337,10 +327,20 @@
         // Inicializa o Firebase e o Banco
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
 
         // Compartilha com o seu arquivo script.js externo
         window.db = db;
-        window.firestore = { collection, addDoc, getDocs, query, orderBy };
+        window.firestore = { collection, addDoc, getDocs, query, orderBy, doc, getDoc, setDoc, serverTimestamp };
+        window.firebaseAuth = auth;
+        window.firebaseAuthApi = {
+            GoogleAuthProvider,
+            signInWithPopup,
+            signOut,
+            onAuthStateChanged,
+            setPersistence,
+            browserLocalPersistence
+        };
         
         console.log("Servidor Cloud conectado!");
     </script>

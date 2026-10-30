@@ -5,8 +5,8 @@
 // Armazenamento local e em memória
 let reservas = JSON.parse(localStorage.getItem('reservas_salvas')) || [];
 let todasAsReservas = [...reservas]; // Cache unificado de reservas (Nuvem + Local)
-let usuariosCadastrados = JSON.parse(localStorage.getItem('usuarios')) || [];
-let usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado')) || null;
+let usuarioLogado = null;
+const perfisEmCarregamento = new Map();
 
 // Expediente padrão de funcionamento do Centro Tecnológico (CT)
 const CONFIG_CT = {
@@ -56,6 +56,29 @@ const dadosSalas = {
 
 window.addEventListener('DOMContentLoaded', () => {
     atualizarInterfaceUsuario();
+    if (!window.firebaseAuthApi || !window.firebaseAuth) {
+        console.error("Firebase Authentication não foi inicializado.");
+        mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
+    } else {
+        window.firebaseAuthApi.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
+            if (!firebaseUser) {
+                usuarioLogado = null;
+                atualizarInterfaceUsuario();
+                return;
+            }
+
+            try {
+                usuarioLogado = await obterOuCriarPerfil(firebaseUser);
+                atualizarInterfaceUsuario();
+                fecharModalLogin();
+            } catch (error) {
+                console.error("Erro ao carregar o perfil autenticado:", error);
+                usuarioLogado = null;
+                atualizarInterfaceUsuario();
+                mostrarErroAutenticacao("Não foi possível carregar seu perfil. Verifique a conexão e tente entrar novamente.");
+            }
+        });
+    }
     garantirDataInicialReserva();
     trocarFotoReserva();
     carregarGradeHorarios();
@@ -277,7 +300,7 @@ function mostrarAlertaReserva(tipo, mensagem) {
     if (!alerta) return;
 
     alerta.className = `alerta-reserva ${tipo}`;
-    alerta.innerHTML = `<span>${mensagem}</span>`;
+    alerta.textContent = mensagem;
     alerta.style.display = 'flex';
 }
 
@@ -553,7 +576,8 @@ function atualizarDestaqueSlots(horaInicio, horaFim) {
 
 async function salvarReserva() {
     // 1. Verificação de autenticação
-    if (!usuarioLogado) {
+    const firebaseUser = window.firebaseAuth && window.firebaseAuth.currentUser;
+    if (!firebaseUser || !usuarioLogado || usuarioLogado.uid !== firebaseUser.uid) {
         alert("Você precisa entrar no sistema antes de realizar um agendamento!");
         abrirModalLogin();
         return;
@@ -622,6 +646,7 @@ async function salvarReserva() {
 
     const novaReserva = {
         usuario: usuarioLogado.nome,
+        usuarioUid: firebaseUser.uid,
         ambiente: ambiente,
         motivo: motivo || "Agendamento de ambiente",
         data: dataFormatada,
@@ -641,16 +666,12 @@ async function salvarReserva() {
     }
 
     try {
-        // Envia para o Firebase Firestore se conectado
-        if (window.firestore && window.db) {
-            try {
-                await window.firestore.addDoc(window.firestore.collection(window.db, "reservas"), novaReserva);
-            } catch (firebaseErr) {
-                console.warn("Aviso ao salvar no Firestore (armazenando localmente):", firebaseErr);
-            }
+        if (!window.firestore || !window.db) {
+            throw new Error("Firebase Firestore não está inicializado.");
         }
+        await window.firestore.addDoc(window.firestore.collection(window.db, "reservas"), novaReserva);
 
-        // Salva também no cache local (redundância e funcionamento garantido)
+        // Atualiza o cache apenas após a confirmação da gravação na nuvem.
         reservas.push(novaReserva);
         todasAsReservas.push(novaReserva);
         localStorage.setItem('reservas_salvas', JSON.stringify(reservas));
@@ -670,7 +691,10 @@ async function salvarReserva() {
 
     } catch (e) {
         console.error("Erro ao salvar reserva: ", e);
-        mostrarAlertaReserva("erro", "Erro ao salvar reserva. Tente novamente.");
+        const mensagem = e.code === "permission-denied"
+            ? "Sua sessão não tem permissão para confirmar esta reserva. Entre novamente e tente outra vez."
+            : "Não foi possível salvar a reserva no Firebase. Ela não foi confirmada; tente novamente.";
+        mostrarAlertaReserva("erro", mensagem);
     } finally {
         if (btnAgendar) {
             btnAgendar.disabled = false;
@@ -732,12 +756,21 @@ async function atualizarTabela() {
 
     listaDocs.forEach((res) => {
         const tr = document.createElement('tr');
-        const subtituloMotivo = res.motivo ? `<br><small style="color: #64748b; font-weight: normal;">${res.motivo}</small>` : '';
-        tr.innerHTML = `
-            <td><strong>${res.usuario}</strong>${subtituloMotivo}</td>
-            <td>${res.ambiente}</td>
-            <td>${res.data}</td>
-        `;
+        const usuarioCell = document.createElement('td');
+        const nomeUsuario = document.createElement('strong');
+        nomeUsuario.textContent = res.usuario || "Usuário";
+        usuarioCell.appendChild(nomeUsuario);
+        if (res.motivo) {
+            const motivo = document.createElement('small');
+            motivo.style.cssText = "color: #64748b; font-weight: normal;";
+            motivo.textContent = res.motivo;
+            usuarioCell.append(document.createElement('br'), motivo);
+        }
+        const ambienteCell = document.createElement('td');
+        ambienteCell.textContent = res.ambiente || "";
+        const dataCell = document.createElement('td');
+        dataCell.textContent = res.data || "";
+        tr.append(usuarioCell, ambienteCell, dataCell);
         tbody.appendChild(tr);
     });
 }
@@ -755,25 +788,23 @@ function abrirModalConfirmacao(reserva) {
         return;
     }
 
-    detalhes.innerHTML = `
-        <div class="resumo-item">
-            <span>Ambiente:</span>
-            <strong>${reserva.ambiente}</strong>
-        </div>
-        <div class="resumo-item">
-            <span>Data e Horário:</span>
-            <strong>${reserva.data}</strong>
-        </div>
-        <div class="resumo-item">
-            <span>Responsável:</span>
-            <strong>${reserva.usuario}</strong>
-        </div>
-        ${reserva.motivo ? `
-        <div class="resumo-item">
-            <span>Motivo:</span>
-            <strong>${reserva.motivo}</strong>
-        </div>` : ''}
-    `;
+    detalhes.replaceChildren();
+    const itens = [
+        ["Ambiente:", reserva.ambiente],
+        ["Data e Horário:", reserva.data],
+        ["Responsável:", reserva.usuario]
+    ];
+    if (reserva.motivo) itens.push(["Motivo:", reserva.motivo]);
+    itens.forEach(([rotulo, valor]) => {
+        const item = document.createElement('div');
+        item.className = 'resumo-item';
+        const textoRotulo = document.createElement('span');
+        textoRotulo.textContent = rotulo;
+        const textoValor = document.createElement('strong');
+        textoValor.textContent = valor || "";
+        item.append(textoRotulo, textoValor);
+        detalhes.appendChild(item);
+    });
 
     modal.style.display = 'flex';
 }
@@ -790,20 +821,18 @@ function irParaListaReservas() {
 }
 
 // ==========================================
-// SISTEMA DE AUTENTICAÇÃO (LOGIN E CADASTRO)
+// AUTENTICAÇÃO GOOGLE E PERFIL DO USUÁRIO
 // ==========================================
 
 function abrirModalLogin() {
     if (usuarioLogado) {
         if (confirm("Deseja encerrar sua sessão atual?")) {
-            usuarioLogado = null;
-            localStorage.removeItem('usuarioLogado');
-            atualizarInterfaceUsuario();
+            sairDaConta();
         }
         return;
     }
-    
-    alternarAbasLogin('login');
+
+    limparErroAutenticacao();
     const modalLogin = document.getElementById('modalLogin');
     if (modalLogin) modalLogin.style.display = 'flex';
 }
@@ -813,96 +842,129 @@ function fecharModalLogin() {
     if (modalLogin) modalLogin.style.display = 'none';
 }
 
-function alternarAbasLogin(aba) {
-    const telaLogin = document.getElementById('tela-login-direto');
-    const telaCadastro = document.getElementById('tela-cadastro');
-    const titulo = document.getElementById('loginModalTitulo');
-
-    if (!telaLogin || !telaCadastro || !titulo) return;
-
-    if (aba === 'cadastro') {
-        telaLogin.style.display = 'none';
-        telaCadastro.style.display = 'block';
-        titulo.innerText = 'Cadastro de Usuário';
-    } else {
-        telaLogin.style.display = 'block';
-        telaCadastro.style.display = 'none';
-        titulo.innerText = 'Entrar no Sistema';
-    }
+function mostrarErroAutenticacao(mensagem) {
+    const erro = document.getElementById('auth-erro');
+    if (!erro) return;
+    erro.textContent = mensagem;
+    erro.hidden = false;
 }
 
-function realizarCadastro() {
-    const inputNome = document.getElementById('cad-nome');
-    const inputWhats = document.getElementById('cad-whatsapp');
-    const inputTipo = document.getElementById('cad-tipo');
-
-    if (!inputNome || !inputWhats || !inputTipo) return;
-
-    const nome = inputNome.value.trim();
-    const whatsapp = inputWhats.value.trim();
-    const tipo = inputTipo.value;
-
-    if (!nome || !whatsapp) {
-        alert("Por favor, preencha todos os campos do cadastro!");
-        return;
-    }
-
-    const usuarioExistente = usuariosCadastrados.find(u => u.whatsapp === whatsapp);
-    if (usuarioExistente) {
-        alert("Este número de WhatsApp já está cadastrado! Use a tela de Login.");
-        alternarAbasLogin('login');
-        return;
-    }
-
-    const novoUsuario = { nome, whatsapp, tipo };
-    usuariosCadastrados.push(novoUsuario);
-    localStorage.setItem('usuarios', JSON.stringify(usuariosCadastrados));
-    
-    usuarioLogado = novoUsuario;
-    localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
-
-    alert(`Cadastro realizado com sucesso! Bem-vindo, ${nome}.`);
-    fecharModalLogin();
-    atualizarInterfaceUsuario();
+function limparErroAutenticacao() {
+    const erro = document.getElementById('auth-erro');
+    if (!erro) return;
+    erro.textContent = "";
+    erro.hidden = true;
 }
 
-function realizarLogin() {
-    const inputWhats = document.getElementById('login-whatsapp');
-    if (!inputWhats) return;
-
-    const whatsappInput = inputWhats.value.trim();
-
-    if (!whatsappInput) {
-        alert("Por favor, informe seu número de WhatsApp!");
-        return;
+function obterOuCriarPerfil(firebaseUser) {
+    if (perfisEmCarregamento.has(firebaseUser.uid)) {
+        return perfisEmCarregamento.get(firebaseUser.uid);
     }
 
-    const usuarioEncontrado = usuariosCadastrados.find(u => u.whatsapp === whatsappInput);
+    const promessaPerfil = (async () => {
+        const referencia = window.firestore.doc(window.db, "usuarios", firebaseUser.uid);
+        const documento = await window.firestore.getDoc(referencia);
+        const dadosExistentes = documento.exists() ? documento.data() : {};
+        const tiposValidos = ["Aluno", "Professor"];
+        const tipoSelecionado = document.getElementById('cad-tipo')?.value;
+        const perfil = {
+            uid: firebaseUser.uid,
+            nome: firebaseUser.displayName || dadosExistentes.nome || "Usuário",
+            email: firebaseUser.email || dadosExistentes.email || "",
+            fotoURL: firebaseUser.photoURL || dadosExistentes.fotoURL || "",
+            tipo: tiposValidos.includes(dadosExistentes.tipo)
+                ? dadosExistentes.tipo
+                : (tiposValidos.includes(tipoSelecionado) ? tipoSelecionado : "Aluno")
+        };
+        const dadosParaSalvar = {
+            ...perfil,
+            atualizadoEm: window.firestore.serverTimestamp()
+        };
+        if (!documento.exists()) {
+            dadosParaSalvar.criadoEm = window.firestore.serverTimestamp();
+        }
+        await window.firestore.setDoc(referencia, dadosParaSalvar, { merge: true });
+        return perfil;
+    })().finally(() => perfisEmCarregamento.delete(firebaseUser.uid));
 
-    if (usuarioEncontrado) {
-        usuarioLogado = usuarioEncontrado;
-        localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
-        fecharModalLogin();
+    perfisEmCarregamento.set(firebaseUser.uid, promessaPerfil);
+    return promessaPerfil;
+}
+
+async function realizarLoginGoogle() {
+    const botao = document.getElementById('btn-login-google');
+    const textoBotao = botao && botao.querySelector('span');
+    const textoOriginal = textoBotao ? textoBotao.textContent : "Continuar com Google";
+    limparErroAutenticacao();
+    if (botao) botao.disabled = true;
+    if (textoBotao) textoBotao.textContent = "Conectando ao Google...";
+
+    try {
+        const api = window.firebaseAuthApi;
+        if (!api || !window.firebaseAuth || !window.db || !window.firestore) {
+            throw new Error("Firebase Authentication ou Firestore não foi inicializado.");
+        }
+        await api.setPersistence(window.firebaseAuth, api.browserLocalPersistence);
+        const provedor = new api.GoogleAuthProvider();
+        const credencial = await api.signInWithPopup(window.firebaseAuth, provedor);
+        usuarioLogado = await obterOuCriarPerfil(credencial.user);
         atualizarInterfaceUsuario();
-    } else {
-        alert("Número não encontrado! Por favor, realize seu cadastro primeiro.");
-        alternarAbasLogin('cadastro');
+        fecharModalLogin();
+    } catch (error) {
+        console.error("Erro ao autenticar com Google:", error);
+        const mensagens = {
+            "auth/popup-closed-by-user": "A janela do Google foi fechada antes de concluir o login.",
+            "auth/popup-blocked": "O navegador bloqueou a janela do Google. Permita pop-ups e tente novamente.",
+            "auth/unauthorized-domain": "Este domínio não está autorizado no Firebase Authentication.",
+            "auth/operation-not-allowed": "O provedor Google ainda não foi habilitado no Firebase Console.",
+            "permission-denied": "O Firebase recusou o acesso ao perfil. Verifique as regras do Firestore."
+        };
+        mostrarErroAutenticacao(mensagens[error.code] || "Não foi possível entrar com Google. Verifique sua conexão e a configuração do Firebase.");
+    } finally {
+        if (botao) botao.disabled = false;
+        if (textoBotao) textoBotao.textContent = textoOriginal;
+    }
+}
+
+async function sairDaConta() {
+    try {
+        await window.firebaseAuthApi.signOut(window.firebaseAuth);
+    } catch (error) {
+        console.error("Erro ao sair da conta Google:", error);
+        alert("Não foi possível encerrar a sessão. Tente novamente.");
     }
 }
 
 function atualizarInterfaceUsuario() {
     const textoTopo = document.getElementById('texto-usuario-topo');
+    const iconeLogin = document.getElementById('icone-login-topo');
+    const avatar = document.getElementById('avatar-usuario-topo');
     if (!textoTopo) return;
     
     if (usuarioLogado) {
         const primeiroNome = usuarioLogado.nome.split(' ')[0];
         if (window.innerWidth <= 768) {
-            textoTopo.innerText = `(${usuarioLogado.tipo}) | Sair`;
+            textoTopo.innerText = `${primeiroNome} | Sair`;
         } else {
             textoTopo.innerText = `${primeiroNome} (${usuarioLogado.tipo}) | Sair`;
         }
+        if (iconeLogin) iconeLogin.hidden = true;
+        if (avatar) {
+            avatar.hidden = !usuarioLogado.fotoURL;
+            avatar.src = usuarioLogado.fotoURL || "";
+            avatar.title = usuarioLogado.nome;
+        }
+        const botaoStatus = document.getElementById('btn-status-usuario');
+        if (botaoStatus) botaoStatus.title = `Sair da conta de ${usuarioLogado.nome}`;
     } else {
         textoTopo.innerText = "Entrar";
+        if (iconeLogin) iconeLogin.hidden = false;
+        if (avatar) {
+            avatar.hidden = true;
+            avatar.removeAttribute('src');
+        }
+        const botaoStatus = document.getElementById('btn-status-usuario');
+        if (botaoStatus) botaoStatus.title = "Continuar com Google";
     }
 }
 
