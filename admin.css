@@ -1,0 +1,142 @@
+:root {
+    color-scheme: light;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    color: #1e293b;
+    background: #f3f7fc;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background:
+        radial-gradient(ellipse at 15% 15%, rgba(80, 145, 255, 0.16), transparent 38%),
+        linear-gradient(135deg, #f8fbff, #eaf1fb);
+}
+
+.admin-card {
+    width: min(100%, 440px);
+    padding: 42px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(15, 45, 93, 0.12);
+}
+
+.brand {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.brand img {
+    display: block;
+    width: min(100%, 230px);
+    height: 82px;
+    object-fit: contain;
+}
+
+.admin-card h1 {
+    margin: 0;
+    color: #0e3da3;
+    font-size: 1.65rem;
+    text-align: center;
+}
+
+.subtitle {
+    margin: 10px 0 28px;
+    color: #64748b;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.field {
+    margin-bottom: 18px;
+}
+
+.field label {
+    display: block;
+    margin-bottom: 8px;
+    color: #334155;
+    font-size: 0.92rem;
+    font-weight: 650;
+}
+
+.field input {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    background: #f8fafc;
+    color: #1e293b;
+    font: inherit;
+}
+
+.field input:focus {
+    outline: 3px solid rgba(14, 61, 163, 0.14);
+    border-color: #0e3da3;
+    background: #fff;
+}
+
+.submit,
+.logout {
+    width: 100%;
+    min-height: 48px;
+    border: 0;
+    border-radius: 9px;
+    background: #0e3da3;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.submit:hover,
+.logout:hover {
+    background: #184bc7;
+}
+
+.submit:active,
+.logout:active {
+    transform: translateY(1px);
+}
+
+.error {
+    margin: -8px 0 18px;
+    padding: 11px 13px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 0.9rem;
+}
+
+.panel-card {
+    width: min(100%, 620px);
+}
+
+.panel-card h1 {
+    margin-bottom: 30px;
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 16px;
+    }
+
+    .admin-card {
+        padding: 30px 24px;
+        border-radius: 18px;
+    }
+}
