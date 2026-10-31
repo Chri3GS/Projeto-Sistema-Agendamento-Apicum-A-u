@@ -28,7 +28,23 @@ test('protege o painel contra acesso direto e permite login apenas com credencia
 
     const loginPage = await fetch(`${baseUrl}/admin`);
     assert.equal(loginPage.status, 200);
-    assert.match(await loginPage.text(), /type="password"/);
+    const loginHtml = await loginPage.text();
+    assert.match(loginHtml, /href="\/admin\.css"/);
+    assert.match(loginHtml, /src="\/imagens\/logo\.png"/);
+    assert.match(loginHtml, /type="password"/);
+
+    const adminStylesheet = await fetch(`${baseUrl}/admin.css`);
+    assert.equal(adminStylesheet.status, 200);
+    assert.match(adminStylesheet.headers.get('content-type'), /text\/css/);
+    assert.match(await adminStylesheet.text(), /\.admin-card/);
+
+    const adminLogo = await fetch(`${baseUrl}/imagens/logo.png`);
+    assert.equal(adminLogo.status, 200);
+    assert.match(adminLogo.headers.get('content-type'), /image\/png/);
+
+    const mainStylesheet = await fetch(`${baseUrl}/style.css`);
+    assert.equal(mainStylesheet.status, 200);
+    assert.match(mainStylesheet.headers.get('content-type'), /text\/css/);
 
     const privateServerFile = await fetch(`${baseUrl}/server.js`);
     assert.equal(privateServerFile.status, 404);
@@ -59,7 +75,9 @@ test('protege o painel contra acesso direto e permite login apenas com credencia
         headers: { Cookie: cookie.split(';')[0] }
     });
     assert.equal(panel.status, 200);
-    assert.match(await panel.text(), /Painel Administrativo/);
+    const panelHtml = await panel.text();
+    assert.match(panelHtml, /href="\/admin\.css"/);
+    assert.match(panelHtml, /Painel Administrativo/);
 
     const logout = await fetch(`${baseUrl}/admin/logout`, {
         method: 'POST',

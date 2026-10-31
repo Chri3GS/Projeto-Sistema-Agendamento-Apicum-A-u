@@ -257,7 +257,7 @@ function createAdminServer({ username, passwordHash }) {
             });
         }
 
-        if (pathname.startsWith('/admin')) {
+        if (pathname === '/admin' || pathname.startsWith('/admin/')) {
             response.writeHead(404).end('Não encontrado.');
             return;
         }
