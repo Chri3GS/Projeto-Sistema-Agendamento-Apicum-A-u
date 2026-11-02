@@ -46,6 +46,10 @@ test('protege o painel contra acesso direto e permite login apenas com credencia
     assert.equal(mainStylesheet.status, 200);
     assert.match(mainStylesheet.headers.get('content-type'), /text\/css/);
 
+    const publicHome = await fetch(`${baseUrl}/`);
+    assert.equal(publicHome.status, 200);
+    assert.match(await publicHome.text(), /name="techagenda-admin-session" content="false"/);
+
     const privateServerFile = await fetch(`${baseUrl}/server.js`);
     assert.equal(privateServerFile.status, 404);
 
@@ -66,10 +70,24 @@ test('protege o painel contra acesso direto e permite login apenas com credencia
         redirect: 'manual'
     });
     assert.equal(validLogin.status, 303);
-    assert.equal(validLogin.headers.get('location'), '/admin/painel');
+    assert.equal(validLogin.headers.get('location'), '/');
     const cookie = validLogin.headers.get('set-cookie');
     assert.match(cookie, /HttpOnly/);
     assert.match(cookie, /SameSite=Strict/);
+    assert.match(cookie, /Path=\//);
+
+    const authenticatedHome = await fetch(`${baseUrl}/`, {
+        headers: { Cookie: cookie.split(';')[0] }
+    });
+    assert.equal(authenticatedHome.status, 200);
+    assert.match(await authenticatedHome.text(), /name="techagenda-admin-session" content="true"/);
+
+    const authenticatedAdminRoute = await fetch(`${baseUrl}/admin`, {
+        headers: { Cookie: cookie.split(';')[0] },
+        redirect: 'manual'
+    });
+    assert.equal(authenticatedAdminRoute.status, 303);
+    assert.equal(authenticatedAdminRoute.headers.get('location'), '/');
 
     const panel = await fetch(`${baseUrl}/admin/painel`, {
         headers: { Cookie: cookie.split(';')[0] }
@@ -85,10 +103,16 @@ test('protege o painel contra acesso direto e permite login apenas com credencia
         redirect: 'manual'
     });
     assert.equal(logout.status, 303);
+    assert.match(logout.headers.get('set-cookie'), /Path=\//);
 
     const afterLogout = await fetch(`${baseUrl}/admin/painel`, {
         headers: { Cookie: cookie.split(';')[0] },
         redirect: 'manual'
     });
     assert.equal(afterLogout.status, 303);
+
+    const publicHomeAfterLogout = await fetch(`${baseUrl}/`, {
+        headers: { Cookie: logout.headers.get('set-cookie').split(';')[0] }
+    });
+    assert.match(await publicHomeAfterLogout.text(), /name="techagenda-admin-session" content="false"/);
 });

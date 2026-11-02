@@ -146,7 +146,7 @@ function redirect(response, location, headers = {}) {
     response.end();
 }
 
-function serveStatic(request, response, pathname) {
+function serveStatic(request, response, pathname, isAdminSession = false) {
     let relativePath;
     try {
         relativePath = decodeURIComponent(pathname === '/' ? '/index.html' : pathname).slice(1);
@@ -174,15 +174,40 @@ function serveStatic(request, response, pathname) {
             return;
         }
 
+        if (request.method === 'HEAD') {
+            response.writeHead(200, {
+                'Cache-Control': relativePath === 'index.html' ? 'no-store' : 'no-cache',
+                'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+                'X-Content-Type-Options': 'nosniff'
+            });
+            response.end();
+            return;
+        }
+        if (relativePath === 'index.html') {
+            fs.readFile(filePath, 'utf8', (readError, html) => {
+                if (readError) {
+                    response.writeHead(500).end('Não foi possível carregar o site.');
+                    return;
+                }
+                const adminMarker = `name="techagenda-admin-session" content="${isAdminSession}"`;
+                const page = html.replace(
+                    /name="techagenda-admin-session" content="false"/,
+                    adminMarker
+                );
+                response.writeHead(200, {
+                    'Cache-Control': 'no-store',
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'X-Content-Type-Options': 'nosniff'
+                });
+                response.end(page);
+            });
+            return;
+        }
         response.writeHead(200, {
             'Cache-Control': 'no-cache',
             'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
             'X-Content-Type-Options': 'nosniff'
         });
-        if (request.method === 'HEAD') {
-            response.end();
-            return;
-        }
         fs.createReadStream(filePath).pipe(response);
     });
 }
@@ -200,7 +225,7 @@ function createAdminServer({ username, passwordHash }) {
         }
 
         if (pathname === '/admin' && request.method === 'GET') {
-            if (getSession(request)) return redirect(response, '/admin/painel');
+            if (getSession(request)) return redirect(response, '/');
             return sendHtml(response, 200, loginPage());
         }
 
@@ -236,8 +261,8 @@ function createAdminServer({ username, passwordHash }) {
             const secureCookie = request.socket.encrypted || process.env.NODE_ENV === 'production'
                 ? '; Secure'
                 : '';
-            return redirect(response, '/admin/painel', {
-                'Set-Cookie': `techagenda_admin=${sessionId}; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=${SESSION_TTL_MS / 1000}${secureCookie}`
+            return redirect(response, '/', {
+                'Set-Cookie': `techagenda_admin=${sessionId}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_MS / 1000}${secureCookie}`
             });
         }
 
@@ -253,7 +278,7 @@ function createAdminServer({ username, passwordHash }) {
                 ? '; Secure'
                 : '';
             return redirect(response, '/admin', {
-                'Set-Cookie': `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=0${secureCookie}`
+                'Set-Cookie': `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureCookie}`
             });
         }
 
@@ -266,7 +291,7 @@ function createAdminServer({ username, passwordHash }) {
             response.writeHead(405, { Allow: 'GET, HEAD' }).end('Método não permitido.');
             return;
         }
-        serveStatic(request, response, pathname);
+        serveStatic(request, response, pathname, Boolean(getSession(request)));
     });
 }
 
@@ -290,7 +315,7 @@ if (require.main === module) {
     }
 
     const port = Number(process.env.PORT || 3000);
-    const host = process.env.HOST || '127.0.0.1';
+    const host = process.env.HOST || '0.0.0.0';
     server.listen(port, host, () => {
         console.log(`TechAgenda disponível em http://${host}:${port}`);
         console.log(`Login administrativo: http://${host}:${port}/admin`);

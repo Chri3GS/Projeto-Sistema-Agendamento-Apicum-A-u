@@ -55,30 +55,43 @@ const dadosSalas = {
 // ==========================================
 
 window.addEventListener('DOMContentLoaded', () => {
+    window.techAgendaAdminSession = document.querySelector(
+        'meta[name="techagenda-admin-session"]'
+    )?.content === 'true';
+    if (window.techAgendaAdminSession) {
+        usuarioLogado = {
+            uid: 'admin',
+            nome: 'Administrador',
+            tipo: 'Administrador',
+            isAdmin: true
+        };
+    }
     atualizarInterfaceUsuario();
     configurarAtalhoAdministrativo();
-    if (!window.firebaseAuthApi || !window.firebaseAuth) {
-        console.error("Firebase Authentication não foi inicializado.");
-        mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
-    } else {
-        window.firebaseAuthApi.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
-            if (!firebaseUser) {
-                usuarioLogado = null;
-                atualizarInterfaceUsuario();
-                return;
-            }
+    if (!window.techAgendaAdminSession) {
+        if (!window.firebaseAuthApi || !window.firebaseAuth) {
+            console.error("Firebase Authentication não foi inicializado.");
+            mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
+        } else {
+            window.firebaseAuthApi.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
+                if (!firebaseUser) {
+                    usuarioLogado = null;
+                    atualizarInterfaceUsuario();
+                    return;
+                }
 
-            try {
-                usuarioLogado = await obterOuCriarPerfil(firebaseUser);
-                atualizarInterfaceUsuario();
-                fecharModalLogin();
-            } catch (error) {
-                console.error("Erro ao carregar o perfil autenticado:", error);
-                usuarioLogado = null;
-                atualizarInterfaceUsuario();
-                mostrarErroAutenticacao("Não foi possível carregar seu perfil. Verifique a conexão e tente entrar novamente.");
-            }
-        });
+                try {
+                    usuarioLogado = await obterOuCriarPerfil(firebaseUser);
+                    atualizarInterfaceUsuario();
+                    fecharModalLogin();
+                } catch (error) {
+                    console.error("Erro ao carregar o perfil autenticado:", error);
+                    usuarioLogado = null;
+                    atualizarInterfaceUsuario();
+                    mostrarErroAutenticacao("Não foi possível carregar seu perfil. Verifique a conexão e tente entrar novamente.");
+                }
+            });
+        }
     }
     garantirDataInicialReserva();
     trocarFotoReserva();
@@ -603,6 +616,10 @@ async function salvarReserva() {
     // 1. Verificação de autenticação
     const firebaseUser = window.firebaseAuth && window.firebaseAuth.currentUser;
     if (!firebaseUser || !usuarioLogado || usuarioLogado.uid !== firebaseUser.uid) {
+        if (window.techAgendaAdminSession) {
+            alert("A sessão administrativa permite navegar pelo site. Para confirmar uma reserva, entre com uma conta Google.");
+            return;
+        }
         alert("Você precisa entrar no sistema antes de realizar um agendamento!");
         abrirModalLogin();
         return;
@@ -952,6 +969,15 @@ async function realizarLoginGoogle() {
 }
 
 async function sairDaConta() {
+    if (window.techAgendaAdminSession) {
+        const formularioLogout = document.createElement('form');
+        formularioLogout.method = 'post';
+        formularioLogout.action = '/admin/logout';
+        document.body.appendChild(formularioLogout);
+        formularioLogout.submit();
+        return;
+    }
+
     try {
         await window.firebaseAuthApi.signOut(window.firebaseAuth);
     } catch (error) {
