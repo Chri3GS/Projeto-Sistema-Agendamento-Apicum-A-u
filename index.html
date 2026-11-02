@@ -210,20 +210,93 @@
         </section>
 
         <section id="lista" class="view" style="display:none;">
-            <h1>Lista de Reserva</h1>
-            <div class="table-container">
-                <table id="tabela-reservas">
-                    <thead>
-                        <tr>
-                            <th>Usuário</th>
-                            <th>Ambiente</th>
-                            <th>Data/horário</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        </tbody>
-                </table>
+            <header class="reservation-list-header">
+                <div class="reservation-list-heading">
+                    <span class="reservation-list-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <rect x="3.5" y="5" width="17" height="16" rx="2.5"></rect>
+                            <path d="M7.5 3v4M16.5 3v4M4 9.5h16M8 13h2m4 0h2m-8 4h2"></path>
+                        </svg>
+                    </span>
+                    <div>
+                        <p class="reservation-list-eyebrow">AGENDA DO CENTRO TECNOLÓGICO</p>
+                        <h1>Lista de Reservas</h1>
+                        <p class="reservation-list-description">Acompanhe os agendamentos e consulte a disponibilidade dos ambientes.</p>
+                    </div>
+                </div>
+            </header>
+
+            <div class="reservation-list-stats" aria-label="Resumo das reservas">
+                <article class="reservation-stat-card">
+                    <span class="reservation-stat-icon total" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M7 3.75h8l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5.75a2 2 0 0 1 2-2Z"></path><path d="M14.5 4v4h4M8 12h8m-8 4h8"></path></svg>
+                    </span>
+                    <div><span>Total de reservas</span><strong id="lista-total-reservas">0</strong></div>
+                </article>
+                <article class="reservation-stat-card">
+                    <span class="reservation-stat-icon active" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3 2"></path></svg>
+                    </span>
+                    <div><span>Reservas ativas</span><strong id="lista-reservas-ativas">0</strong></div>
+                </article>
+                <article class="reservation-stat-card">
+                    <span class="reservation-stat-icon completed" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5"></path><circle cx="12" cy="12" r="9"></circle></svg>
+                    </span>
+                    <div><span>Concluídas</span><strong id="lista-reservas-concluidas">0</strong></div>
+                </article>
+                <article class="reservation-stat-card">
+                    <span class="reservation-stat-icon cancelled" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6m0-6-6 6"></path></svg>
+                    </span>
+                    <div><span>Canceladas</span><strong id="lista-reservas-canceladas">0</strong></div>
+                </article>
             </div>
+
+            <section class="reservation-list-panel" aria-label="Reservas cadastradas">
+                <div class="reservation-list-tools">
+                    <label class="reservation-search">
+                        <span class="sr-only">Pesquisar por usuário ou ambiente</span>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 4.5 4.5"></path></svg>
+                        <input id="lista-pesquisa" type="search" placeholder="Pesquisar usuário ou ambiente..." autocomplete="off">
+                    </label>
+                    <div class="reservation-list-filters">
+                        <label>
+                            <span class="sr-only">Filtrar por ambiente</span>
+                            <select id="lista-filtro-ambiente"><option value="">Todos os ambientes</option></select>
+                        </label>
+                        <label>
+                            <span class="sr-only">Filtrar por data</span>
+                            <input id="lista-filtro-data" type="date" aria-label="Filtrar por data">
+                        </label>
+                        <label>
+                            <span class="sr-only">Filtrar por situação</span>
+                            <select id="lista-filtro-situacao">
+                                <option value="">Todas as situações</option>
+                                <option value="ativa">Agendada</option>
+                                <option value="concluida">Concluída</option>
+                                <option value="cancelada">Cancelada</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                <div class="reservation-list-table-wrap">
+                    <table id="tabela-reservas" class="reservation-list-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Responsável</th>
+                                <th scope="col">Ambiente</th>
+                                <th scope="col">Data e horário</th>
+                                <th scope="col">Situação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="reservation-list-empty" colspan="4">Carregando reservas...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p id="lista-resultado-count" class="reservation-list-result-count" aria-live="polite"></p>
+            </section>
         </section>
 
     <section id="falarComCt" class="view" style="display:none;">

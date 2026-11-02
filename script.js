@@ -83,6 +83,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     atualizarInterfaceUsuario();
     configurarAtalhoAdministrativo();
+    configurarFiltrosLista();
     renderizarAmbientes();
     atualizarOpcoesAmbiente();
     carregarAmbientesPublicos();
@@ -531,6 +532,9 @@ function showSection(sectionId, element) {
     if (sectionId === 'reserva') {
         garantirDataInicialReserva();
         carregarGradeHorarios();
+    }
+    if (sectionId === 'lista') {
+        atualizarTabela();
     }
     if (sectionId === 'administracao' && window.techAgendaAdminSession) {
         carregarPainelAdmin();
@@ -1194,7 +1198,7 @@ async function atualizarTabela() {
     const tbody = document.querySelector('#tabela-reservas tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:20px; color:#64748b;'>Carregando dados da nuvem...</td></tr>";
+    tbody.innerHTML = "<tr><td class='reservation-list-empty' colspan='4'>Carregando reservas...</td></tr>";
 
     let listaDocs = [];
     let consultouFirestore = false;
@@ -1220,37 +1224,168 @@ async function atualizarTabela() {
     if (!consultouFirestore) {
         listaDocs = [...reservas];
     } else {
-        // Atualiza o cache local com os dados da nuvem
-        todasAsReservas = [...listaDocs];
+        todasAsReservas = listaDocs;
+        reservas = [...listaDocs];
         localStorage.setItem('reservas_salvas', JSON.stringify(listaDocs));
     }
 
-    tbody.innerHTML = "";
+    atualizarResumoLista(listaDocs);
+    atualizarFiltroAmbientesLista(listaDocs);
+    renderizarListaReservas(listaDocs);
+}
 
-    if (listaDocs.length === 0) {
-        tbody.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:20px; color:#94a3b8;'>Nenhum agendamento realizado até o momento.</td></tr>";
-        return;
+function configurarFiltrosLista() {
+    const search = document.getElementById('lista-pesquisa');
+    const environment = document.getElementById('lista-filtro-ambiente');
+    const date = document.getElementById('lista-filtro-data');
+    const status = document.getElementById('lista-filtro-situacao');
+    [search, environment, date, status].forEach((control) => {
+        if (!control) return;
+        control.addEventListener('input', () => renderizarListaReservas());
+        control.addEventListener('change', () => renderizarListaReservas());
+    });
+}
+
+function situacaoReservaLista(reserva, agora = new Date()) {
+    const status = String(reserva.status || reserva.situacao || '').toLocaleLowerCase('pt-BR');
+    if (reserva.canceladoEm || ['cancelada', 'cancelado', 'cancelled', 'canceled'].includes(status)) {
+        return 'cancelada';
+    }
+    if (['concluida', 'concluído', 'concluido', 'completed', 'finalizada', 'finalizado'].includes(status)) {
+        return 'concluida';
+    }
+    const intervalo = extrairIntervaloReserva(reserva);
+    return intervalo && intervalo.fim <= agora ? 'concluida' : 'ativa';
+}
+
+function atualizarResumoLista(lista) {
+    const counts = { ativa: 0, concluida: 0, cancelada: 0 };
+    const agora = new Date();
+    lista.forEach((reserva) => {
+        counts[situacaoReservaLista(reserva, agora)] += 1;
+    });
+    const values = {
+        'lista-total-reservas': lista.length,
+        'lista-reservas-ativas': counts.ativa,
+        'lista-reservas-concluidas': counts.concluida,
+        'lista-reservas-canceladas': counts.cancelada
+    };
+    Object.entries(values).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    });
+}
+
+function atualizarFiltroAmbientesLista(lista) {
+    const select = document.getElementById('lista-filtro-ambiente');
+    if (!select) return;
+    const currentValue = select.value;
+    const names = [...new Set(lista.map((reserva) => reserva.ambiente).filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right, 'pt-BR'));
+    select.replaceChildren(new Option('Todos os ambientes', ''));
+    names.forEach((name) => select.add(new Option(name, name)));
+    if (names.includes(currentValue)) select.value = currentValue;
+}
+
+function renderizarListaReservas(lista = todasAsReservas) {
+    const tbody = document.querySelector('#tabela-reservas tbody');
+    if (!tbody) return;
+    const search = document.getElementById('lista-pesquisa')?.value.trim().toLocaleLowerCase('pt-BR') || '';
+    const environment = document.getElementById('lista-filtro-ambiente')?.value || '';
+    const date = document.getElementById('lista-filtro-data')?.value || '';
+    const status = document.getElementById('lista-filtro-situacao')?.value || '';
+    const now = new Date();
+    const filtered = lista.filter((reserva) => {
+        const matchesSearch = `${reserva.usuario || ''} ${reserva.ambiente || ''}`
+            .toLocaleLowerCase('pt-BR').includes(search);
+        if (!matchesSearch || (environment && reserva.ambiente !== environment)) return false;
+        const interval = extrairIntervaloReserva(reserva);
+        if (date && interval?.dataStr !== date) return false;
+        return !status || situacaoReservaLista(reserva, now) === status;
+    }).sort((left, right) => {
+        const startA = extrairIntervaloReserva(left)?.inicio?.getTime() || 0;
+        const startB = extrairIntervaloReserva(right)?.inicio?.getTime() || 0;
+        return startA - startB;
+    });
+
+    tbody.replaceChildren();
+    if (!filtered.length) {
+        const row = tbody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 4;
+        cell.className = 'reservation-list-empty';
+        cell.textContent = lista.length
+            ? 'Nenhuma reserva corresponde aos filtros selecionados.'
+            : 'Nenhuma reserva cadastrada até o momento.';
+    } else {
+        filtered.forEach((reserva) => tbody.appendChild(criarLinhaReservaLista(reserva, now)));
+    }
+    const resultCount = document.getElementById('lista-resultado-count');
+    if (resultCount) {
+        resultCount.textContent = `Exibindo ${filtered.length} de ${lista.length} ${lista.length === 1 ? 'reserva' : 'reservas'}`;
+    }
+}
+
+function criarLinhaReservaLista(reserva, agora) {
+    const row = document.createElement('tr');
+    const interval = extrairIntervaloReserva(reserva);
+    const status = situacaoReservaLista(reserva, agora);
+    const user = document.createElement('td');
+    user.dataset.label = 'Responsável';
+    const userName = document.createElement('strong');
+    userName.className = 'reservation-list-user';
+    userName.textContent = reserva.usuario || 'Usuário';
+    user.appendChild(userName);
+    if (reserva.motivo) {
+        const reason = document.createElement('small');
+        reason.className = 'reservation-list-reason';
+        reason.textContent = reserva.motivo;
+        user.appendChild(reason);
     }
 
-    listaDocs.forEach((res) => {
-        const tr = document.createElement('tr');
-        const usuarioCell = document.createElement('td');
-        const nomeUsuario = document.createElement('strong');
-        nomeUsuario.textContent = res.usuario || "Usuário";
-        usuarioCell.appendChild(nomeUsuario);
-        if (res.motivo) {
-            const motivo = document.createElement('small');
-            motivo.style.cssText = "color: #64748b; font-weight: normal;";
-            motivo.textContent = res.motivo;
-            usuarioCell.append(document.createElement('br'), motivo);
-        }
-        const ambienteCell = document.createElement('td');
-        ambienteCell.textContent = res.ambiente || "";
-        const dataCell = document.createElement('td');
-        dataCell.textContent = res.data || "";
-        tr.append(usuarioCell, ambienteCell, dataCell);
-        tbody.appendChild(tr);
-    });
+    const environment = document.createElement('td');
+    environment.dataset.label = 'Ambiente';
+    const environmentName = document.createElement('span');
+    environmentName.className = 'reservation-list-environment';
+    environmentName.textContent = reserva.ambiente || 'Ambiente não informado';
+    environment.appendChild(environmentName);
+
+    const schedule = document.createElement('td');
+    schedule.dataset.label = 'Data e horário';
+    if (interval) {
+        const dateText = document.createElement('strong');
+        dateText.className = 'reservation-list-date';
+        dateText.textContent = interval.inicio.toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+        const timeText = document.createElement('span');
+        timeText.className = 'reservation-list-time';
+        timeText.textContent = `${interval.horaInicio} – ${interval.horaFim}`;
+        schedule.append(dateText, timeText);
+    } else {
+        const dateText = document.createElement('span');
+        dateText.className = 'reservation-list-date';
+        dateText.textContent = reserva.data || 'Data não informada';
+        schedule.appendChild(dateText);
+    }
+
+    const situation = document.createElement('td');
+    situation.dataset.label = 'Situação';
+    const badge = document.createElement('span');
+    badge.className = `reservation-status-badge ${status}`;
+    const dot = document.createElement('span');
+    dot.className = 'reservation-status-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    badge.append(dot, document.createTextNode({
+        ativa: 'Agendada',
+        concluida: 'Concluída',
+        cancelada: 'Cancelada'
+    }[status]));
+    situation.appendChild(badge);
+    row.append(user, environment, schedule, situation);
+    return row;
 }
 
 // ==========================================
