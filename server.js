@@ -3,12 +3,15 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { promisify } = require('node:util');
+const { StoreError, createAdminStore } = require('./admin-store');
 
 const scrypt = promisify(crypto.scrypt);
 const root = __dirname;
 const sessions = new Map();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 4096;
+const MAX_JSON_BODY_BYTES = 128 * 1024;
+const FIREBASE_PROJECT_ID = 'sistema-agendamento-ct-apc';
 const MIME_TYPES = {
     '.css': 'text/css; charset=utf-8',
     '.html': 'text/html; charset=utf-8',
@@ -56,6 +59,104 @@ function getSession(request) {
         return null;
     }
     return { id: match[1], session };
+}
+
+function initializeFirebaseAdminStore() {
+    try {
+        const { applicationDefault, cert, getApps, initializeApp } = require('firebase-admin/app');
+        const { FieldValue, getFirestore } = require('firebase-admin/firestore');
+        const { getAuth } = require('firebase-admin/auth');
+        const serviceAccount = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
+        const credential = serviceAccount
+            ? cert(JSON.parse(serviceAccount))
+            : (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_ADMIN_USE_ADC === 'true'
+                ? applicationDefault()
+                : null);
+        if (!credential) return null;
+
+        const app = getApps().find((existing) => existing.name === 'techagenda-admin') ||
+            initializeApp({
+                credential,
+                projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || FIREBASE_PROJECT_ID
+            }, 'techagenda-admin');
+        return createAdminStore({
+            db: getFirestore(app),
+            auth: getAuth(app),
+            FieldValue
+        });
+    } catch (error) {
+        console.error('Firebase Admin não pôde ser inicializado:', error.message);
+        return null;
+    }
+}
+
+function sendJson(response, statusCode, data) {
+    response.writeHead(statusCode, {
+        'Cache-Control': 'no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff'
+    });
+    response.end(JSON.stringify(data));
+}
+
+function readJson(request) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        let bodyBytes = 0;
+        let tooLarge = false;
+        request.on('data', (chunk) => {
+            if (tooLarge) return;
+            bodyBytes += chunk.length;
+            if (bodyBytes > MAX_JSON_BODY_BYTES) {
+                tooLarge = true;
+                reject(new StoreError(413, 'O corpo da requisição excede o limite permitido.'));
+                request.resume();
+                return;
+            }
+            chunks.push(chunk);
+        });
+        request.on('end', () => {
+            if (tooLarge) return;
+            try {
+                resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+            } catch {
+                reject(new StoreError(400, 'JSON inválido.'));
+            }
+        });
+        request.on('error', (error) => {
+            if (!tooLarge) reject(error);
+        });
+    });
+}
+
+function isSameOrigin(request) {
+    const origin = request.headers.origin;
+    if (!origin || !request.headers.host) return false;
+    try {
+        return new URL(origin).host === request.headers.host;
+    } catch {
+        return false;
+    }
+}
+
+function sendStoreError(response, error) {
+    if (error instanceof StoreError) {
+        sendJson(response, error.statusCode, { error: error.message });
+        return;
+    }
+    if (error.code === 'auth/argument-error' || error.code === 'auth/id-token-expired' ||
+        error.code === 'auth/invalid-id-token' || error.code === 'auth/id-token-revoked') {
+        sendJson(response, 401, { error: 'Sessão Google inválida ou expirada.' });
+        return;
+    }
+    console.error('Falha na API do Firestore:', error);
+    const unavailable = error.code === 5 || error.code === 7 ||
+        error.code === 'app/invalid-credential' || error.code === 'auth/invalid-credential';
+    sendJson(response, unavailable ? 503 : 500, {
+        error: unavailable
+            ? 'A integração segura com o Firestore Admin não está disponível. Configure as credenciais do servidor.'
+            : 'Não foi possível concluir a operação no banco de dados.'
+    });
 }
 
 function sendHtml(response, statusCode, html, headers = {}) {
@@ -212,7 +313,7 @@ function serveStatic(request, response, pathname, isAdminSession = false) {
     });
 }
 
-function createAdminServer({ username, passwordHash }) {
+function createAdminServer({ username, passwordHash, firebaseStore = null }) {
     const credentials = parsePasswordHash(passwordHash);
 
     return http.createServer(async (request, response) => {
@@ -222,6 +323,88 @@ function createAdminServer({ username, passwordHash }) {
         } catch {
             response.writeHead(400).end('Requisição inválida.');
             return;
+        }
+
+        if (pathname === '/api/ambientes' && request.method === 'GET') {
+            if (!firebaseStore) {
+                return sendJson(response, 503, {
+                    error: 'O catálogo compartilhado exige credenciais Firebase Admin configuradas no servidor.'
+                });
+            }
+            try {
+                return sendJson(response, 200, await firebaseStore.listPublicEnvironments());
+            } catch (error) {
+                return sendStoreError(response, error);
+            }
+        }
+
+        if (pathname === '/api/reservas' && request.method === 'POST') {
+            if (!firebaseStore) {
+                return sendJson(response, 503, {
+                    error: 'A criação segura de reservas exige credenciais Firebase Admin no servidor.'
+                });
+            }
+            const authorization = request.headers.authorization || '';
+            const token = authorization.match(/^Bearer (.+)$/i)?.[1];
+            if (!token) return sendJson(response, 401, { error: 'Entre com Google para confirmar a reserva.' });
+            if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Origem da requisição inválida.' });
+            try {
+                const data = await readJson(request);
+                const reservation = await firebaseStore.createReservation(data, token);
+                return sendJson(response, 201, reservation);
+            } catch (error) {
+                return sendStoreError(response, error);
+            }
+        }
+
+        if (pathname.startsWith('/api/admin/')) {
+            const adminSession = getSession(request);
+            if (!adminSession) return sendJson(response, 401, { error: 'Autenticação administrativa obrigatória.' });
+            if (!firebaseStore) {
+                return sendJson(response, 503, {
+                    error: 'Configure credenciais Firebase Admin no servidor para habilitar o gerenciamento compartilhado.'
+                });
+            }
+            const isMutation = !['GET', 'HEAD'].includes(request.method);
+            if (isMutation && !isSameOrigin(request)) {
+                return sendJson(response, 403, { error: 'Origem da requisição inválida.' });
+            }
+            if (isMutation && !/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
+                return sendJson(response, 415, { error: 'Esta operação exige conteúdo JSON.' });
+            }
+            const actor = adminSession.session.username;
+            try {
+                if (pathname === '/api/admin/dashboard' && request.method === 'GET') {
+                    return sendJson(response, 200, await firebaseStore.getDashboard());
+                }
+                if (pathname === '/api/admin/ambientes' && request.method === 'POST') {
+                    const created = await firebaseStore.saveEnvironment(await readJson(request), null, actor);
+                    return sendJson(response, 201, created);
+                }
+                const environmentMatch = pathname.match(/^\/api\/admin\/ambientes\/([^/]+)$/);
+                if (environmentMatch && ['PUT', 'PATCH'].includes(request.method)) {
+                    const id = decodeURIComponent(environmentMatch[1]);
+                    const updated = await firebaseStore.saveEnvironment(await readJson(request), id, actor);
+                    return sendJson(response, 200, updated);
+                }
+                if (environmentMatch && request.method === 'DELETE') {
+                    await firebaseStore.deleteEnvironment(decodeURIComponent(environmentMatch[1]), actor);
+                    return sendJson(response, 200, { ok: true });
+                }
+                const cancelMatch = pathname.match(/^\/api\/admin\/reservas\/([^/]+)\/cancelar$/);
+                if (cancelMatch && request.method === 'PATCH') {
+                    await firebaseStore.cancelReservation(decodeURIComponent(cancelMatch[1]), actor);
+                    return sendJson(response, 200, { ok: true });
+                }
+                const reservationMatch = pathname.match(/^\/api\/admin\/reservas\/([^/]+)$/);
+                if (reservationMatch && request.method === 'DELETE') {
+                    await firebaseStore.deleteReservation(decodeURIComponent(reservationMatch[1]), actor);
+                    return sendJson(response, 200, { ok: true });
+                }
+                return sendJson(response, 404, { error: 'Operação administrativa não encontrada.' });
+            } catch (error) {
+                return sendStoreError(response, error);
+            }
         }
 
         if (pathname === '/admin' && request.method === 'GET') {
@@ -257,7 +440,7 @@ function createAdminServer({ username, passwordHash }) {
             }
 
             const sessionId = crypto.randomBytes(32).toString('hex');
-            sessions.set(sessionId, { expiresAt: Date.now() + SESSION_TTL_MS });
+            sessions.set(sessionId, { expiresAt: Date.now() + SESSION_TTL_MS, username });
             const secureCookie = request.socket.encrypted || process.env.NODE_ENV === 'production'
                 ? '; Secure'
                 : '';
@@ -305,9 +488,14 @@ if (require.main === module) {
 
     let server;
     try {
+        const firebaseStore = initializeFirebaseAdminStore();
+        if (!firebaseStore) {
+            console.warn('Firebase Admin não configurado. O site funciona, mas as APIs de gerenciamento ficam indisponíveis.');
+        }
         server = createAdminServer({
             username,
-            passwordHash: process.env.ADMIN_PASSWORD_HASH
+            passwordHash: process.env.ADMIN_PASSWORD_HASH,
+            firebaseStore
         });
     } catch (error) {
         console.error(error.message);

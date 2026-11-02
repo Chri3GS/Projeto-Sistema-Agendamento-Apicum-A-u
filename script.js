@@ -50,6 +50,21 @@ const dadosSalas = {
     }
 };
 
+let ambientesCadastrados = Object.entries(dadosSalas).map(([nome, sala]) => ({
+    id: nome.toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    nome,
+    descricao: sala.info.join(', '),
+    capacidade: Number.parseInt(sala.capacidade, 10),
+    imagem: sala.foto,
+    informacoes: sala.info,
+    recursos: sala.recursos,
+    abertura: '08:00',
+    fechamento: '18:00',
+    diasDisponiveis: [0, 1, 2, 3, 4, 5, 6],
+    ativo: true,
+    nomesAnteriores: []
+}));
+
 // ==========================================
 // INICIALIZAÇÃO DA APLICAÇÃO
 // ==========================================
@@ -68,6 +83,14 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     atualizarInterfaceUsuario();
     configurarAtalhoAdministrativo();
+    renderizarAmbientes();
+    atualizarOpcoesAmbiente();
+    carregarAmbientesPublicos();
+    if (window.techAgendaAdminSession) {
+        const menuAdmin = document.getElementById('menu-admin');
+        if (menuAdmin) menuAdmin.hidden = false;
+        carregarPainelAdmin();
+    }
     if (!window.techAgendaAdminSession) {
         if (!window.firebaseAuthApi || !window.firebaseAuth) {
             console.error("Firebase Authentication não foi inicializado.");
@@ -123,6 +146,360 @@ function configurarAtalhoAdministrativo() {
     });
 }
 
+async function apiJson(url, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    const response = await fetch(url, {
+        credentials: 'same-origin',
+        ...options,
+        headers: {
+            ...(options.body || isMutation ? { 'Content-Type': 'application/json' } : {}),
+            ...options.headers
+        }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || `Falha ao acessar o servidor (${response.status}).`);
+    return body;
+}
+
+function normalizarAmbiente(data) {
+    return {
+        ...data,
+        nome: data.nome || 'Ambiente',
+        descricao: data.descricao || '',
+        capacidade: Number(data.capacidade) || 0,
+        imagem: data.imagem || 'imagens/biblioteca.jpeg',
+        informacoes: Array.isArray(data.informacoes) ? data.informacoes : [],
+        recursos: Array.isArray(data.recursos) ? data.recursos : [],
+        abertura: data.abertura || '08:00',
+        fechamento: data.fechamento || '18:00',
+        diasDisponiveis: Array.isArray(data.diasDisponiveis) ? data.diasDisponiveis : [0, 1, 2, 3, 4, 5, 6],
+        ativo: data.ativo !== false,
+        nomesAnteriores: Array.isArray(data.nomesAnteriores) ? data.nomesAnteriores : []
+    };
+}
+
+async function carregarAmbientesPublicos() {
+    if (window.techAgendaAdminSession) return;
+    try {
+        const ambientes = await apiJson('/api/ambientes');
+        ambientesCadastrados = ambientes.map(normalizarAmbiente);
+        renderizarAmbientes();
+        atualizarOpcoesAmbiente();
+        carregarGradeHorarios();
+    } catch (error) {
+        console.warn("Catálogo compartilhado indisponível; mantendo ambientes existentes nesta sessão:", error);
+    }
+}
+
+function atualizarOpcoesAmbiente() {
+    const selectAmbiente = document.getElementById('select-ambiente');
+    const filtroAmbiente = document.getElementById('filtro-reserva-ambiente');
+    const nomeAtual = selectAmbiente?.value;
+    const ativos = ambientesCadastrados.filter((ambiente) => ambiente.ativo);
+    if (selectAmbiente) {
+        selectAmbiente.replaceChildren();
+        ativos.forEach((ambiente) => {
+            const option = document.createElement('option');
+            option.value = ambiente.nome;
+            option.textContent = ambiente.nome;
+            selectAmbiente.appendChild(option);
+        });
+        if (ativos.some((ambiente) => ambiente.nome === nomeAtual)) {
+            selectAmbiente.value = nomeAtual;
+        }
+        selectAmbiente.disabled = ativos.length === 0;
+        const botaoReserva = document.getElementById('btn-agendar-reserva');
+        if (botaoReserva) botaoReserva.disabled = ativos.length === 0;
+    }
+    if (filtroAmbiente) {
+        const filtroAtual = filtroAmbiente.value;
+        filtroAmbiente.replaceChildren(new Option('Todos', ''));
+        ambientesCadastrados.forEach((ambiente) => {
+            filtroAmbiente.add(new Option(ambiente.nome, ambiente.id));
+        });
+        filtroAmbiente.value = filtroAtual;
+    }
+}
+
+function renderizarAmbientes() {
+    const grid = document.getElementById('grid-ambientes');
+    if (!grid) return;
+    grid.replaceChildren();
+    const ativos = ambientesCadastrados.filter((ambiente) => ambiente.ativo);
+    if (!ativos.length) {
+        const vazio = document.createElement('p');
+        vazio.className = 'catalogo-vazio';
+        vazio.textContent = 'Nenhum ambiente está disponível para agendamento no momento.';
+        grid.appendChild(vazio);
+        return;
+    }
+    ativos.forEach((ambiente) => {
+        const card = document.createElement('article');
+        card.className = 'card';
+        const image = document.createElement('img');
+        image.src = ambiente.imagem;
+        image.alt = ambiente.nome;
+        image.loading = 'lazy';
+        const body = document.createElement('div');
+        body.className = 'card-body';
+        const title = document.createElement('h3');
+        title.textContent = ambiente.nome;
+        const description = document.createElement('p');
+        description.className = 'environment-description';
+        description.textContent = ambiente.descricao;
+        const buttons = document.createElement('div');
+        buttons.className = 'buttons';
+        const infoButton = document.createElement('button');
+        infoButton.className = 'btn-info';
+        infoButton.type = 'button';
+        infoButton.textContent = 'Informações';
+        infoButton.addEventListener('click', () => abrirInformacao(ambiente.id));
+        const bookingButton = document.createElement('button');
+        bookingButton.className = 'btn-primary';
+        bookingButton.type = 'button';
+        bookingButton.textContent = 'Agendar';
+        bookingButton.addEventListener('click', () => abrirReserva(ambiente.nome));
+        buttons.append(infoButton, bookingButton);
+        body.append(title, description, buttons);
+        card.append(image, body);
+        grid.appendChild(card);
+    });
+}
+
+function mostrarStatusAdmin(mensagem, tipo = 'erro') {
+    const status = document.getElementById('admin-status');
+    if (!status) return;
+    status.textContent = mensagem;
+    status.className = `admin-status ${tipo}`;
+    status.hidden = !mensagem;
+}
+
+async function carregarPainelAdmin() {
+    if (!window.techAgendaAdminSession) return;
+    try {
+        const dashboard = await apiJson('/api/admin/dashboard');
+        ambientesCadastrados = dashboard.ambientes.map(normalizarAmbiente);
+        todasAsReservas = dashboard.reservas;
+        document.getElementById('admin-total-ambientes').textContent = dashboard.resumo.ambientes;
+        document.getElementById('admin-total-reservas').textContent = dashboard.resumo.reservas;
+        document.getElementById('admin-reservas-ativas').textContent = dashboard.resumo.ativas;
+        atualizarOpcoesAmbiente();
+        renderizarAmbientes();
+        renderizarTabelaAdminAmbientes();
+        renderizarTabelaAdminReservas();
+        carregarGradeHorarios();
+        mostrarStatusAdmin('', 'sucesso');
+    } catch (error) {
+        mostrarStatusAdmin(error.message);
+    }
+}
+
+function renderizarTabelaAdminAmbientes() {
+    const tbody = document.getElementById('admin-tbody-ambientes');
+    if (!tbody) return;
+    tbody.replaceChildren();
+    if (!ambientesCadastrados.length) {
+        const row = tbody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 5;
+        cell.textContent = 'Nenhum ambiente cadastrado.';
+        return;
+    }
+    ambientesCadastrados.forEach((ambiente) => {
+        const row = tbody.insertRow();
+        [ambiente.nome, `${ambiente.capacidade} pessoas`,
+            `${ambiente.abertura}–${ambiente.fechamento} • ${formatarDias(ambiente.diasDisponiveis)}`,
+            ambiente.ativo ? 'Ativo' : 'Desativado'].forEach((value) => {
+            row.insertCell().textContent = value;
+        });
+        const actions = row.insertCell();
+        const edit = document.createElement('button');
+        edit.className = 'admin-action-button';
+        edit.type = 'button';
+        edit.textContent = 'Editar';
+        edit.addEventListener('click', () => editarAmbienteAdmin(ambiente.id));
+        const remove = document.createElement('button');
+        remove.className = 'admin-action-button danger';
+        remove.type = 'button';
+        remove.textContent = 'Excluir';
+        remove.addEventListener('click', () => excluirAmbienteAdmin(ambiente.id, ambiente.nome));
+        actions.append(edit, remove);
+    });
+}
+
+function formatarDias(days) {
+    const nomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return days.map((day) => nomes[day]).join(', ') || 'Sem dias';
+}
+
+function editarAmbienteAdmin(id) {
+    const ambiente = ambientesCadastrados.find((item) => item.id === id);
+    if (!ambiente) return;
+    document.getElementById('admin-ambiente-id').value = ambiente.id;
+    document.getElementById('admin-ambiente-nome').value = ambiente.nome;
+    document.getElementById('admin-ambiente-descricao').value = ambiente.descricao;
+    document.getElementById('admin-ambiente-capacidade').value = ambiente.capacidade;
+    document.getElementById('admin-ambiente-imagem').value = ambiente.imagem;
+    document.getElementById('admin-ambiente-informacoes').value = ambiente.informacoes.join('\n');
+    document.getElementById('admin-ambiente-recursos').value = ambiente.recursos.join('\n');
+    document.getElementById('admin-ambiente-abertura').value = ambiente.abertura;
+    document.getElementById('admin-ambiente-fechamento').value = ambiente.fechamento;
+    document.getElementById('admin-ambiente-ativo').checked = ambiente.ativo;
+    document.querySelectorAll('input[name="admin-dia"]').forEach((checkbox) => {
+        checkbox.checked = ambiente.diasDisponiveis.includes(Number(checkbox.value));
+    });
+    document.getElementById('form-admin-ambiente').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function limparFormularioAmbiente() {
+    const form = document.getElementById('form-admin-ambiente');
+    if (!form) return;
+    form.reset();
+    document.getElementById('admin-ambiente-id').value = '';
+    document.getElementById('admin-ambiente-abertura').value = '08:00';
+    document.getElementById('admin-ambiente-fechamento').value = '18:00';
+    document.querySelectorAll('input[name="admin-dia"]').forEach((checkbox) => {
+        checkbox.checked = true;
+    });
+    document.getElementById('admin-ambiente-ativo').checked = true;
+}
+
+async function salvarAmbienteAdmin(event) {
+    event.preventDefault();
+    const id = document.getElementById('admin-ambiente-id').value;
+    const data = {
+        nome: document.getElementById('admin-ambiente-nome').value,
+        descricao: document.getElementById('admin-ambiente-descricao').value,
+        capacidade: Number(document.getElementById('admin-ambiente-capacidade').value),
+        imagem: document.getElementById('admin-ambiente-imagem').value,
+        informacoes: document.getElementById('admin-ambiente-informacoes').value.split('\n').map((item) => item.trim()).filter(Boolean),
+        recursos: document.getElementById('admin-ambiente-recursos').value.split('\n').map((item) => item.trim()).filter(Boolean),
+        abertura: document.getElementById('admin-ambiente-abertura').value,
+        fechamento: document.getElementById('admin-ambiente-fechamento').value,
+        diasDisponiveis: [...document.querySelectorAll('input[name="admin-dia"]:checked')].map((checkbox) => Number(checkbox.value)),
+        ativo: document.getElementById('admin-ambiente-ativo').checked
+    };
+    try {
+        await apiJson(id ? `/api/admin/ambientes/${encodeURIComponent(id)}` : '/api/admin/ambientes', {
+            method: id ? 'PUT' : 'POST',
+            body: JSON.stringify(data)
+        });
+        limparFormularioAmbiente();
+        await carregarPainelAdmin();
+        mostrarStatusAdmin('Ambiente salvo com sucesso.', 'sucesso');
+    } catch (error) {
+        mostrarStatusAdmin(error.message);
+    }
+}
+
+async function excluirAmbienteAdmin(id, nome) {
+    if (!confirm(`Excluir o ambiente "${nome}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+        await apiJson(`/api/admin/ambientes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        await carregarPainelAdmin();
+        mostrarStatusAdmin('Ambiente excluído com sucesso.', 'sucesso');
+    } catch (error) {
+        mostrarStatusAdmin(error.message);
+    }
+}
+
+function statusReservaAdmin(reserva) {
+    if (['ativa', 'concluida', 'cancelada'].includes(reserva.situacao)) return reserva.situacao;
+    if (reserva.status === 'cancelada' || reserva.status === 'cancelled') return 'cancelada';
+    const intervalo = extrairIntervaloReserva(reserva);
+    if (!intervalo) return 'ativa';
+    return intervalo.fim <= new Date() ? 'concluida' : 'ativa';
+}
+
+function renderizarTabelaAdminReservas() {
+    const tbody = document.getElementById('admin-tbody-reservas');
+    if (!tbody) return;
+    const ambienteId = document.getElementById('filtro-reserva-ambiente').value;
+    const date = document.getElementById('filtro-reserva-data').value;
+    const user = document.getElementById('filtro-reserva-usuario').value.trim().toLocaleLowerCase('pt-BR');
+    const status = document.getElementById('filtro-reserva-status').value;
+    const ambientesFiltro = ambientesCadastrados.find((item) => item.id === ambienteId);
+    const filtered = todasAsReservas.filter((reserva) => {
+        const interval = extrairIntervaloReserva(reserva);
+        if (ambienteId && reserva.ambienteId !== ambienteId &&
+            reserva.ambiente !== ambientesFiltro?.nome &&
+            !ambientesFiltro?.nomesAnteriores.includes(reserva.ambiente)) return false;
+        if (date && (reserva.dataReserva || interval?.dataStr) !== date) return false;
+        if (user && !`${reserva.usuario || ''} ${reserva.usuarioEmail || ''}`.toLocaleLowerCase('pt-BR').includes(user)) return false;
+        return !status || statusReservaAdmin(reserva) === status;
+    });
+
+    tbody.replaceChildren();
+    if (!filtered.length) {
+        const row = tbody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 6;
+        cell.textContent = 'Nenhuma reserva corresponde aos filtros.';
+        return;
+    }
+    filtered.sort((left, right) => {
+        const a = extrairIntervaloReserva(left)?.inicio?.getTime() || 0;
+        const b = extrairIntervaloReserva(right)?.inicio?.getTime() || 0;
+        return b - a;
+    }).forEach((reserva) => {
+        const row = tbody.insertRow();
+        const interval = extrairIntervaloReserva(reserva);
+        [
+            `${reserva.usuario || 'Usuário'}${reserva.usuarioEmail ? `\n${reserva.usuarioEmail}` : ''}`,
+            reserva.ambiente || '',
+            reserva.data || '',
+            reserva.motivo || '',
+            statusReservaAdmin(reserva)
+        ].forEach((value, index) => {
+            const cell = row.insertCell();
+            cell.textContent = value;
+            if (index === 0 && reserva.usuarioEmail) cell.className = 'admin-user-cell';
+        });
+        const actions = row.insertCell();
+        if (reserva.id && statusReservaAdmin(reserva) === 'ativa') {
+            const cancel = document.createElement('button');
+            cancel.className = 'admin-action-button';
+            cancel.type = 'button';
+            cancel.textContent = 'Cancelar';
+            cancel.addEventListener('click', () => cancelarReservaAdmin(reserva.id));
+            actions.appendChild(cancel);
+        }
+        if (reserva.id) {
+            const remove = document.createElement('button');
+            remove.className = 'admin-action-button danger';
+            remove.type = 'button';
+            remove.textContent = 'Excluir';
+            remove.addEventListener('click', () => excluirReservaAdmin(reserva.id));
+            actions.appendChild(remove);
+        }
+    });
+}
+
+async function cancelarReservaAdmin(id) {
+    if (!confirm('Cancelar esta reserva? O horário ficará disponível novamente.')) return;
+    try {
+        await apiJson(`/api/admin/reservas/${encodeURIComponent(id)}/cancelar`, { method: 'PATCH' });
+        await carregarPainelAdmin();
+        await atualizarTabela();
+        mostrarStatusAdmin('Reserva cancelada. O horário está disponível novamente.', 'sucesso');
+    } catch (error) {
+        mostrarStatusAdmin(error.message);
+    }
+}
+
+async function excluirReservaAdmin(id) {
+    if (!confirm('Excluir permanentemente este registro de reserva?')) return;
+    try {
+        await apiJson(`/api/admin/reservas/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        await carregarPainelAdmin();
+        await atualizarTabela();
+        mostrarStatusAdmin('Registro de reserva excluído.', 'sucesso');
+    } catch (error) {
+        mostrarStatusAdmin(error.message);
+    }
+}
+
 // ==========================================
 // GERENCIAMENTO DE NAVEGAÇÃO E INTERFACE
 // ==========================================
@@ -155,6 +532,9 @@ function showSection(sectionId, element) {
         garantirDataInicialReserva();
         carregarGradeHorarios();
     }
+    if (sectionId === 'administracao' && window.techAgendaAdminSession) {
+        carregarPainelAdmin();
+    }
 
     // 5. Se estiver no celular, fecha o menu lateral após clicar
     if (window.innerWidth <= 768) {
@@ -165,6 +545,11 @@ function showSection(sectionId, element) {
 
 // Atalho do botão "Agendar" do card da aba Ambientes
 function abrirReserva(nomeAmbiente) {
+    const ambiente = ambientesCadastrados.find((item) => item.nome === nomeAmbiente);
+    if (!ambiente || !ambiente.ativo) {
+        alert("Este ambiente está temporariamente indisponível.");
+        return;
+    }
     const selectAmbiente = document.getElementById('select-ambiente');
     if (selectAmbiente) {
         selectAmbiente.value = nomeAmbiente;
@@ -186,13 +571,22 @@ function trocarFotoReserva() {
     
     if (!selectAmbiente || !imagem) return;
     
-    const ambiente = selectAmbiente.value;
-    const sala = dadosSalas[ambiente] || dadosSalas["Biblioteca"];
-    
-    imagem.src = sala.foto || "imagens/biblioteca.jpeg";
+    const ambiente = ambientesCadastrados.find((item) => item.nome === selectAmbiente.value);
+    const sala = ambiente || dadosSalas[selectAmbiente.value] || dadosSalas["Biblioteca"];
+    const foto = ambiente ? ambiente.imagem : sala.foto;
+    imagem.src = foto || "imagens/biblioteca.jpeg";
     
     if (badgeInfo) {
-        badgeInfo.innerText = `${ambiente} • Capacidade: ${sala.capacidade || 'Espaço climatizado'}`;
+        const capacidade = ambiente ? `${ambiente.capacidade} pessoas` : sala.capacidade;
+        badgeInfo.innerText = `${selectAmbiente.value} • Capacidade: ${capacidade || 'Espaço climatizado'}`;
+    }
+    if (ambiente) {
+        const labelInicio = document.querySelector('label[for="hora-inicio"]');
+        const labelFim = document.querySelector('label[for="hora-fim"]');
+        if (labelInicio) labelInicio.textContent = `Início (${ambiente.abertura} - ${ambiente.fechamento})`;
+        if (labelFim) labelFim.textContent = `Término (${ambiente.abertura} - ${ambiente.fechamento})`;
+        const expediente = document.querySelector('.horario-expediente-chip span');
+        if (expediente) expediente.textContent = `🕒 Expediente: ${ambiente.abertura} às ${ambiente.fechamento}`;
     }
 }
 
@@ -273,6 +667,9 @@ function aoMudarHorarioManual() {
     const horaFim = inputFim.value;
     const dataReserva = inputData ? inputData.value : getHojeFormatado();
     const ambiente = selectAmbiente ? selectAmbiente.value : "Biblioteca";
+    const ambienteConfig = ambientesCadastrados.find((item) => item.nome === ambiente);
+    const horaAbertura = ambienteConfig?.abertura || CONFIG_CT.horaAbertura;
+    const horaFechamento = ambienteConfig?.fechamento || CONFIG_CT.horaFechamento;
 
     // Sincroniza campos ocultos legados
     sincronizarCamposLegados(dataReserva, horaInicio, horaFim);
@@ -290,8 +687,13 @@ function aoMudarHorarioManual() {
     }
 
     // 2. Validação de horário fora do expediente (08:00 às 18:00)
-    if (horaInicio < CONFIG_CT.horaAbertura || horaFim > CONFIG_CT.horaFechamento) {
-        mostrarAlertaReserva("aviso", `🕒 O Centro Tecnológico funciona das ${CONFIG_CT.horaAbertura} às ${CONFIG_CT.horaFechamento}. Escolha dentro do expediente.`);
+    if (horaInicio < horaAbertura || horaFim > horaFechamento) {
+        mostrarAlertaReserva("aviso", `🕒 Este ambiente funciona das ${horaAbertura} às ${horaFechamento}. Escolha dentro do expediente.`);
+        atualizarDestaqueSlots(horaInicio, horaFim);
+        return;
+    }
+    if (ambienteConfig && !ambienteConfig.diasDisponiveis.includes(new Date(`${dataReserva}T00:00:00`).getDay())) {
+        mostrarAlertaReserva("aviso", "Este ambiente não funciona na data selecionada.");
         atualizarDestaqueSlots(horaInicio, horaFim);
         return;
     }
@@ -412,7 +814,12 @@ function verificarConflito(ambiente, dataReserva, horaInicio, horaFim) {
     const novoFim = new Date(ano, mes - 1, dia, hFim, mFim, 0);
 
     for (const item of todasAsReservas) {
-        if (item.ambiente !== ambiente) continue;
+        if (item.status === 'cancelada') continue;
+        const configuracaoAmbiente = ambientesCadastrados.find((room) => room.nome === ambiente);
+        const nomesAssociados = configuracaoAmbiente
+            ? [configuracaoAmbiente.nome, ...configuracaoAmbiente.nomesAnteriores]
+            : [ambiente];
+        if (item.ambienteId !== configuracaoAmbiente?.id && !nomesAssociados.includes(item.ambiente)) continue;
 
         const info = extrairIntervaloReserva(item);
         if (!info) continue;
@@ -460,37 +867,32 @@ function carregarGradeHorarios() {
         tituloGrade.innerText = `Disponibilidade - ${ambiente}`;
     }
 
-    // Configuração dos turnos de funcionamento do CT
-    const turnos = [
-        {
-            nome: "🌅 Turno da Manhã",
-            horario: "08:00 às 12:00",
-            slots: [
-                { inicio: "08:00", fim: "09:00" },
-                { inicio: "09:00", fim: "10:00" },
-                { inicio: "10:00", fim: "11:00" },
-                { inicio: "11:00", fim: "12:00" }
-            ]
-        },
-        {
-            nome: "🍽️ Intervalo / Transição",
-            horario: "12:00 às 13:00",
-            slots: [
-                { inicio: "12:00", fim: "13:00" }
-            ]
-        },
-        {
-            nome: "🌇 Turno da Tarde",
-            horario: "13:00 às 18:00",
-            slots: [
-                { inicio: "13:00", fim: "14:00" },
-                { inicio: "14:00", fim: "15:00" },
-                { inicio: "15:00", fim: "16:00" },
-                { inicio: "16:00", fim: "17:00" },
-                { inicio: "17:00", fim: "18:00" }
-            ]
-        }
+    const ambienteConfig = ambientesCadastrados.find((item) => item.nome === ambiente);
+    if (!ambienteConfig || !ambienteConfig.ativo) {
+        container.innerHTML = '<p class="catalogo-vazio">Este ambiente não está disponível.</p>';
+        return;
+    }
+    const diaSemana = new Date(`${dataReserva}T00:00:00`).getDay();
+    if (!ambienteConfig.diasDisponiveis.includes(diaSemana)) {
+        container.innerHTML = '<p class="catalogo-vazio">Este ambiente não funciona na data selecionada.</p>';
+        return;
+    }
+    const minutoInicial = horaEmMinutos(ambienteConfig.abertura);
+    const minutoFinal = horaEmMinutos(ambienteConfig.fechamento);
+    const grupos = [
+        { nome: '🌅 Turno da Manhã', slots: [] },
+        { nome: '🍽️ Intervalo / Transição', slots: [] },
+        { nome: '🌇 Turno da Tarde', slots: [] }
     ];
+    for (let inicio = minutoInicial; inicio + 60 <= minutoFinal; inicio += 60) {
+        const slot = { inicio: minutosEmHora(inicio), fim: minutosEmHora(inicio + 60) };
+        const grupo = inicio < 12 * 60 ? grupos[0] : (inicio < 13 * 60 ? grupos[1] : grupos[2]);
+        grupo.slots.push(slot);
+    }
+    const turnos = grupos.filter((grupo) => grupo.slots.length).map((grupo) => ({
+        ...grupo,
+        horario: `${grupo.slots[0].inicio} às ${grupo.slots[grupo.slots.length - 1].fim}`
+    }));
 
     const inputInicio = document.getElementById('hora-inicio');
     const inputFim = document.getElementById('hora-fim');
@@ -540,7 +942,7 @@ function carregarGradeHorarios() {
                 if (conflito) {
                     status = 'ocupado';
                     labelTag = 'Reservado';
-                    detalheTexto = `Por: ${conflito.usuario}`;
+                    detalheTexto = `Por: ${escaparHTML(conflito.usuario)}`;
                     disabled = 'disabled';
                     onClickAttr = '';
                 } else if (horaInicioSel && horaFimSel && horaFimSel > horaInicioSel) {
@@ -636,9 +1038,10 @@ async function salvarReserva() {
     const dataReserva = inputData ? inputData.value : "";
     const horaInicio = inputInicio ? inputInicio.value : "";
     const horaFim = inputFim ? inputFim.value : "";
+    const ambienteConfig = ambientesCadastrados.find((item) => item.nome === ambiente);
 
     // 2. Validação de preenchimento dos campos obrigatórios
-    if (!dataReserva || !horaInicio || !horaFim) {
+    if (!ambienteConfig || !ambienteConfig.ativo || !dataReserva || !horaInicio || !horaFim) {
         mostrarAlertaReserva("erro", "⚠️ Por favor, preencha a data e os horários de início e término!");
         return;
     }
@@ -657,8 +1060,13 @@ async function salvarReserva() {
     }
 
     // 5. Validação de expediente CT (08:00 às 18:00)
-    if (horaInicio < CONFIG_CT.horaAbertura || horaFim > CONFIG_CT.horaFechamento) {
-        mostrarAlertaReserva("erro", `🕒 Horário inválido: O CT funciona das ${CONFIG_CT.horaAbertura} às ${CONFIG_CT.horaFechamento}.`);
+    if (horaInicio < ambienteConfig.abertura || horaFim > ambienteConfig.fechamento) {
+        mostrarAlertaReserva("erro", `🕒 Horário inválido: este ambiente funciona das ${ambienteConfig.abertura} às ${ambienteConfig.fechamento}.`);
+        return;
+    }
+
+    if (!ambienteConfig.diasDisponiveis.includes(new Date(`${dataReserva}T00:00:00`).getDay())) {
+        mostrarAlertaReserva("erro", "Este ambiente não funciona na data selecionada.");
         return;
     }
 
@@ -689,6 +1097,7 @@ async function salvarReserva() {
     const novaReserva = {
         usuario: usuarioLogado.nome,
         usuarioUid: firebaseUser.uid,
+        ambienteId: ambienteConfig.id,
         ambiente: ambiente,
         motivo: motivo || "Agendamento de ambiente",
         data: dataFormatada,
@@ -708,10 +1117,19 @@ async function salvarReserva() {
     }
 
     try {
-        if (!window.firestore || !window.db) {
-            throw new Error("Firebase Firestore não está inicializado.");
-        }
-        await window.firestore.addDoc(window.firestore.collection(window.db, "reservas"), novaReserva);
+        const token = await firebaseUser.getIdToken();
+        const savedReservation = await apiJson('/api/reservas', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+                ambienteId: ambienteConfig.id,
+                dataReserva,
+                horaInicio,
+                horaFim,
+                motivo
+            })
+        });
+        novaReserva.id = savedReservation.id;
 
         // Atualiza o cache apenas após a confirmação da gravação na nuvem.
         reservas.push(novaReserva);
@@ -733,16 +1151,32 @@ async function salvarReserva() {
 
     } catch (e) {
         console.error("Erro ao salvar reserva: ", e);
-        const mensagem = e.code === "permission-denied"
-            ? "Sua sessão não tem permissão para confirmar esta reserva. Entre novamente e tente outra vez."
-            : "Não foi possível salvar a reserva no Firebase. Ela não foi confirmada; tente novamente.";
-        mostrarAlertaReserva("erro", mensagem);
+        mostrarAlertaReserva("erro", e.message || "Não foi possível salvar a reserva. Ela não foi confirmada; tente novamente.");
     } finally {
         if (btnAgendar) {
             btnAgendar.disabled = false;
             btnAgendar.innerText = "Agendar Ambiente";
         }
     }
+}
+
+function horaEmMinutos(hora) {
+    const [horas, minutos] = hora.split(':').map(Number);
+    return horas * 60 + minutos;
+}
+
+function minutosEmHora(total) {
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function escaparHTML(value) {
+    return String(value).replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
 }
 
 // Formatação legível de data para exibição
@@ -763,6 +1197,7 @@ async function atualizarTabela() {
     tbody.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:20px; color:#64748b;'>Carregando dados da nuvem...</td></tr>";
 
     let listaDocs = [];
+    let consultouFirestore = false;
 
     // Tenta buscar no Firebase Firestore
     if (window.firestore && window.db) {
@@ -772,8 +1207,9 @@ async function atualizarTabela() {
                 window.firestore.orderBy("dataOrdenacao", "asc")
             );
             const querySnapshot = await window.firestore.getDocs(q);
+            consultouFirestore = true;
             querySnapshot.forEach((doc) => {
-                listaDocs.push(doc.data());
+                listaDocs.push({ id: doc.id, ...doc.data() });
             });
         } catch (e) {
             console.warn("Erro ao buscar no Firestore, utilizando cache local:", e);
@@ -781,7 +1217,7 @@ async function atualizarTabela() {
     }
 
     // Se a nuvem não retornou itens ou está sem conexão, usa o cache local
-    if (listaDocs.length === 0) {
+    if (!consultouFirestore) {
         listaDocs = [...reservas];
     } else {
         // Atualiza o cache local com os dados da nuvem
@@ -1025,22 +1461,40 @@ function atualizarInterfaceUsuario() {
 
 function abrirInformacao(nomeSala) {
     const modal = document.getElementById('modalInformacao');
-    const sala = dadosSalas[nomeSala] || dadosSalas["Biblioteca"];
+    const ambiente = ambientesCadastrados.find((item) => item.id === nomeSala || item.nome === nomeSala);
 
     const modalTitulo = document.getElementById('modalTitulo');
-    if (modalTitulo) modalTitulo.innerText = nomeSala;
+    if (modalTitulo) modalTitulo.innerText = ambiente?.nome || nomeSala;
     
     const listaInfo = document.getElementById('listaInfo');
     const listaRecursos = document.getElementById('listaRecursos');
     
     if (listaInfo) {
-        listaInfo.innerHTML = sala.info.map(item => `<li>${item}</li>`).join('');
+        listaInfo.replaceChildren();
+        (ambiente?.informacoes || dadosSalasFallback(nomeSala).info).forEach((item) => {
+            const listItem = document.createElement('li');
+            listItem.textContent = item;
+            listaInfo.appendChild(listItem);
+        });
     }
     if (listaRecursos) {
-        listaRecursos.innerHTML = sala.recursos.map(item => `<li>${item}</li>`).join('');
+        listaRecursos.replaceChildren();
+        (ambiente?.recursos || dadosSalasFallback(nomeSala).recursos).forEach((item) => {
+            const listItem = document.createElement('li');
+            listItem.textContent = item;
+            listaRecursos.appendChild(listItem);
+        });
     }
 
     if (modal) modal.style.display = 'flex';
+}
+
+function dadosSalasFallback(name) {
+    const ambiente = ambientesCadastrados.find((item) => item.nome === name);
+    return ambiente ? { info: ambiente.informacoes, recursos: ambiente.recursos } : {
+        info: ['Informações do ambiente indisponíveis.'],
+        recursos: []
+    };
 }
 
 function fecharModal() {

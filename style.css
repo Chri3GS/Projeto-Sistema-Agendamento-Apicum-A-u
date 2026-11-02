@@ -1176,3 +1176,334 @@ th { background: var(--primary-blue); color: white; }
         grid-template-columns: 1fr !important;
     }
 }
+
+#menu-admin[hidden] {
+    display: none;
+}
+
+.environment-description {
+    min-height: 2.8em;
+    margin: -4px 0 16px;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.catalogo-vazio {
+    grid-column: 1 / -1;
+    padding: 28px;
+    color: #64748b;
+    background: #fff;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.admin-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 20px;
+    margin: 20px 0 24px;
+}
+
+.admin-dashboard-header h1 {
+    margin: 4px 0 8px;
+    color: var(--primary-blue);
+    font-size: clamp(1.7rem, 3vw, 2.35rem);
+}
+
+.admin-dashboard-header p:not(.admin-eyebrow) {
+    color: #64748b;
+}
+
+.admin-eyebrow {
+    color: #2563eb;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.admin-header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.admin-header-actions button {
+    flex: none;
+}
+
+.admin-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 22px;
+}
+
+.admin-stat-card,
+.admin-panel-card {
+    border: 1px solid #e4eaf3;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 45, 93, 0.06);
+}
+
+.admin-stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 22px;
+}
+
+.admin-stat-card span {
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.admin-stat-card strong {
+    color: var(--primary-blue);
+    font-size: 2rem;
+}
+
+.admin-panel-card {
+    margin: 0 0 24px;
+    padding: clamp(16px, 2.5vw, 26px);
+}
+
+.admin-panel-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.admin-panel-heading h2 {
+    margin-bottom: 5px;
+    color: #1e293b;
+    font-size: 1.35rem;
+}
+
+.admin-panel-heading p {
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.admin-panel-heading button {
+    flex: none;
+}
+
+.admin-status {
+    margin-bottom: 18px;
+    padding: 12px 15px;
+    border: 1px solid #fecaca;
+    border-radius: 9px;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 0.92rem;
+}
+
+.admin-status.sucesso {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.admin-environment-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+    margin-bottom: 24px;
+    padding: 18px;
+    border-radius: 11px;
+    background: #f8fafc;
+}
+
+.admin-environment-form > label,
+.admin-reservation-filters > label {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    color: #334155;
+    font-size: 0.88rem;
+    font-weight: 650;
+}
+
+.admin-environment-form input:not([type="checkbox"]),
+.admin-environment-form textarea,
+.admin-reservation-filters input,
+.admin-reservation-filters select {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #fff;
+    color: #1e293b;
+    font: inherit;
+}
+
+.admin-environment-form textarea {
+    resize: vertical;
+}
+
+.admin-weekdays {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    grid-column: 1 / -1;
+    padding: 12px;
+    border: 1px solid #dbe3ee;
+    border-radius: 8px;
+}
+
+.admin-weekdays legend {
+    padding: 0 6px;
+    color: #334155;
+    font-size: 0.88rem;
+    font-weight: 650;
+}
+
+.admin-weekdays label,
+.admin-active-toggle {
+    color: #475569;
+    font-size: 0.88rem;
+}
+
+.admin-active-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+}
+
+.admin-form-actions button {
+    min-height: 42px;
+}
+
+.admin-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+}
+
+.admin-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    background: #fff;
+}
+
+.admin-table th,
+.admin-table td {
+    padding: 12px 13px;
+    border-bottom: 1px solid #e8edf4;
+    font-size: 0.88rem;
+    vertical-align: middle;
+}
+
+.admin-table th {
+    background: #eff5ff;
+    color: #1e3a8a;
+    font-weight: 700;
+    text-align: left;
+}
+
+.admin-table td {
+    color: #334155;
+    white-space: pre-line;
+}
+
+.admin-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.admin-action-button {
+    margin: 2px 4px 2px 0;
+    padding: 7px 10px;
+    border: 1px solid #cbdaf5;
+    border-radius: 6px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.8rem;
+}
+
+.admin-action-button.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+    color: #b91c1c;
+}
+
+.admin-reservation-filters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.admin-user-cell {
+    font-size: 0.82rem !important;
+}
+
+@media (max-width: 768px) {
+    .admin-dashboard-header {
+        align-items: flex-start;
+        flex-direction: column;
+        margin-top: 12px;
+    }
+
+    .admin-header-actions {
+        width: 100%;
+    }
+
+    .admin-header-actions button {
+        flex: 1;
+        padding: 10px 8px;
+        font-size: 0.82rem;
+    }
+
+    .admin-stats {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .admin-stat-card {
+        gap: 4px;
+        padding: 14px 17px;
+    }
+
+    .admin-stat-card strong {
+        font-size: 1.6rem;
+    }
+
+    .admin-environment-form {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-weekdays {
+        grid-column: auto;
+    }
+
+    .admin-form-actions {
+        flex-wrap: wrap;
+    }
+
+    .admin-form-actions button {
+        flex: 1;
+    }
+
+    .admin-reservation-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 420px) {
+    .admin-reservation-filters {
+        grid-template-columns: 1fr;
+    }
+}

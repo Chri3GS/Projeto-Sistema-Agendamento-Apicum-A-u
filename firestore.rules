@@ -29,30 +29,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /ambientes/{ambienteId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /reservas/{reservaId} {
       allow read: if true;
-      allow create: if request.auth != null
-        && request.resource.data.usuarioUid == request.auth.uid
-        && request.resource.data.keys().hasAll([
-          'usuarioUid', 'usuario', 'ambiente', 'motivo', 'data', 'dataInicio',
-          'dataFim', 'dataReserva', 'horaInicio', 'horaFim', 'dataOrdenacao', 'criadoEm'
-        ])
-        && request.resource.data.keys().hasOnly([
-          'usuarioUid', 'usuario', 'ambiente', 'motivo', 'data', 'dataInicio',
-          'dataFim', 'dataReserva', 'horaInicio', 'horaFim', 'dataOrdenacao', 'criadoEm'
-        ])
-        && request.resource.data.usuario is string
-        && request.resource.data.ambiente is string
-        && request.resource.data.motivo is string
-        && request.resource.data.data is string
-        && request.resource.data.dataInicio is string
-        && request.resource.data.dataFim is string
-        && request.resource.data.dataReserva is string
-        && request.resource.data.horaInicio is string
-        && request.resource.data.horaFim is string
-        && request.resource.data.criadoEm is string
-        && request.resource.data.dataOrdenacao is timestamp;
-      allow update, delete: if false;
+      allow write: if false;
+    }
+
+    match /agendaLocks/{lockId} {
+      allow read, write: if false;
+    }
+
+    match /adminAuditoria/{auditId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {
