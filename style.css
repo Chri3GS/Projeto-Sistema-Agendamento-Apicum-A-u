@@ -156,11 +156,14 @@ button {
     width: 100%;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    max-width: 1360px;
+    margin-inline: auto;
 }
 
 .reserva-header-titulo {
-    margin-bottom: 20px;
+    width: 100%;
+    margin: 0 auto 22px;
 }
 
 #reserva h1 {
@@ -173,47 +176,46 @@ button {
 .reserva-subtitulo {
     color: #64748b;
     font-size: 0.95rem;
+    line-height: 1.5;
 }
 
 /* Container Principal em Duas Colunas (Formulário + Grade de Horários) */
 .reserva-container {
-    background: white;
-    padding: 26px;
-    border-radius: 16px;
     width: 100%;
-    max-width: 1180px;
-    margin-top: 5px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    max-width: 1360px;
+    margin: 0 auto;
     display: grid;
-    grid-template-columns: 1fr 1.25fr;
-    gap: 28px;
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+    gap: 24px;
+    align-items: start;
 }
 
 /* Coluna 1: Formulário e Imagem */
 .coluna-form-reserva {
-    display: flex;
-    flex-direction: column;
+    min-width: 0;
     width: 100%;
-    position: sticky;
-    top: 20px;
+    padding: 22px;
+    border: 1px solid #e2eaf5;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 45, 93, 0.06);
 }
 
 .header-reserva {
     width: 100%;
-    height: 180px;
+    height: 190px;
     overflow: hidden;
     border-radius: 10px;
     position: relative;
-    margin-bottom: 14px;
-    margin-top: 2px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    margin: 2px 0 14px;
+    background: #eff4fb;
 }
 
 #img-ambiente-reserva {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center;
     transition: transform 0.4s ease;
 }
 
@@ -240,7 +242,7 @@ button {
 }
 
 .form-group {
-    margin-bottom: 13px;
+    margin-bottom: 12px;
 }
 
 .form-group label {
@@ -274,7 +276,7 @@ button {
 .form-row-horarios {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 12px;
 }
 
 /* Banner de Alerta e Conflitos */
@@ -346,17 +348,19 @@ button {
    PAINEL DE DISPONIBILIDADE (GRADE DINÂMICA)
    ========================================== */
 .coluna-grade-reserva {
+    min-width: 0;
     width: 100%;
 }
 
 .painel-disponibilidade {
-    background: #f8fafc;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 20px;
+    min-width: 0;
+    padding: 22px;
+    border: 1px solid #e2eaf5;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 45, 93, 0.06);
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 180px);
 }
 
 .painel-header {
@@ -439,28 +443,7 @@ button {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    overflow-y: auto;
-    padding-right: 6px;
-    margin-right: -4px;
-}
-
-/* Scrollbar limpa e moderna para o contêiner de horários */
-.container-grade-turnos::-webkit-scrollbar {
-    width: 6px;
-}
-
-.container-grade-turnos::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 8px;
-}
-
-.container-grade-turnos::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 8px;
-}
-
-.container-grade-turnos::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    overflow: visible;
 }
 
 .grade-loading {
@@ -472,10 +455,9 @@ button {
 
 .bloco-turno {
     background: #ffffff;
-    border-radius: 10px;
-    padding: 13px 14px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    border-radius: 12px;
+    padding: 14px;
+    border: 1px solid #e6edf6;
 }
 
 .titulo-turno {
@@ -499,8 +481,8 @@ button {
 
 .grid-slots {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
 /* Cards Interativos de Horário */
@@ -1017,6 +999,11 @@ th { background: var(--primary-blue); color: white; }
     .grid-ambientes {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .reserva-container {
+        grid-template-columns: minmax(0, 1fr);
+        max-width: 860px;
+    }
 }
 
 /* --- CONFIGURAÇÃO PADRÃO PC --- */
@@ -1179,8 +1166,8 @@ th { background: var(--primary-blue); color: white; }
 
     .reserva-container {
         grid-template-columns: 1fr !important;
-        gap: 22px !important;
-        padding: 16px !important;
+        gap: 16px !important;
+        padding: 0 !important;
         width: 100% !important;
     }
 
