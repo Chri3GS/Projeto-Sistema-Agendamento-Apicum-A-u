@@ -56,6 +56,7 @@ const dadosSalas = {
 
 window.addEventListener('DOMContentLoaded', () => {
     atualizarInterfaceUsuario();
+    configurarAtalhoAdministrativo();
     if (!window.firebaseAuthApi || !window.firebaseAuth) {
         console.error("Firebase Authentication não foi inicializado.");
         mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
@@ -84,6 +85,30 @@ window.addEventListener('DOMContentLoaded', () => {
     carregarGradeHorarios();
     atualizarTabela();
 });
+
+function configurarAtalhoAdministrativo() {
+    const tituloAmbientes = Array.from(document.querySelectorAll('#home h1'))
+        .find((titulo) => titulo.textContent.trim() === 'Ambientes disponíveis');
+    if (!tituloAmbientes) return;
+
+    let quantidadeCliques = 0;
+    let inicioSequencia = 0;
+    tituloAmbientes.addEventListener('click', () => {
+        const agora = Date.now();
+        if (agora - inicioSequencia > 2000) {
+            quantidadeCliques = 1;
+            inicioSequencia = agora;
+            return;
+        }
+
+        quantidadeCliques += 1;
+        if (quantidadeCliques === 3) {
+            quantidadeCliques = 0;
+            inicioSequencia = 0;
+            window.location.assign('/admin');
+        }
+    });
+}
 
 // ==========================================
 // GERENCIAMENTO DE NAVEGAÇÃO E INTERFACE
