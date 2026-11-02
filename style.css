@@ -1024,6 +1024,7 @@ th { background: var(--primary-blue); color: white; }
         position: fixed;
         top: 0;
         left: 0;
+        right: 0;
         z-index: 1000;
     }
 
@@ -1072,7 +1073,7 @@ th { background: var(--primary-blue); color: white; }
     /* 3. BOTÃO ENTRAR COMPACTO À DIREITA */
     .btn-entrar-topo {
         display: flex !important; 
-        position: absolute;
+        position: fixed;
         right: 15px; /* Um pouco mais perto da borda para ganhar espaço */
         left: auto;
         top: 55px; /* Alinhado no novo centro da barra */
@@ -1082,7 +1083,7 @@ th { background: var(--primary-blue); color: white; }
         border: 2px solid white !important; 
         padding: 6px 10px !important; /* Padding lateral menor para encolher o botão */
         border-radius: 20px !important;    
-        z-index: 1100;
+        z-index: 1101;
         
         /* CORREÇÃO CRUCIAL: Limita a largura máxima do botão no celular */
         max-width: 125px;
