@@ -5,9 +5,9 @@ const path = require('node:path');
 
 const envPath = path.join(__dirname, '.env');
 
-function ask(terminal, question, defaultValue = '') {
+function ask(terminal, question) {
     return new Promise((resolve) => {
-        terminal.question(question, (answer) => resolve(answer || defaultValue));
+        terminal.question(question, (answer) => resolve(answer));
     });
 }
 
@@ -49,19 +49,19 @@ async function main() {
             input: process.stdin,
             output: process.stdout
         });
-        username = (await ask(terminal, 'Usuário administrativo [centro123]: ', 'centro123')).trim();
+        username = (await ask(terminal, 'Usuário administrativo: ')).trim();
         terminal.close();
         password = await askHidden('Senha administrativa (entrada oculta): ');
     } else {
-        process.stdout.write('Usuário administrativo [centro123]: \nSenha administrativa: \n');
+        process.stdout.write('Usuário administrativo: \nSenha administrativa: \n');
         const [usernameInput = '', passwordInput = ''] = fs.readFileSync(0, 'utf8').split(/\r?\n/);
-        username = (usernameInput || 'centro123').trim();
+        username = usernameInput.trim();
         password = passwordInput;
     }
 
-    if (!username || !password || username.length > 100 ||
+    if (!username || !password || password.length < 12 || username.length > 100 ||
         /[\r\n=]/.test(username) || Buffer.byteLength(password) > 1024) {
-        throw new Error('Informe um usuário válido e uma senha de até 1024 bytes.');
+        throw new Error('Informe um usuário válido e uma senha entre 12 e 1024 bytes.');
     }
 
     const salt = crypto.randomBytes(16);

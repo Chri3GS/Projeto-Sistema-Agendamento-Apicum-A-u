@@ -1,45 +1,52 @@
 # TechAgenda
 
-## Executar localmente
+## Publicação no Netlify
 
-O Live Server serve arquivos estáticos em outra origem (normalmente `127.0.0.1:5500`) e não executa as rotas administrativas. Se abrir o site por ele, `/admin` também será solicitado à porta 5500 e falhará. Pare o Live Server e use o servidor Node.js para que a página principal, `/admin` e a sessão compartilhem o mesmo domínio e porta:
+O acesso administrativo no Netlify usa usuário e senha, sem exigir login Google:
 
-1. Instale uma versão LTS do Node.js compatível com `node:test` (Node.js 18 ou superior).
-2. Na pasta do projeto, execute `npm run setup:admin` e informe o usuário e a senha administrativa. O comando cria `.env` com o hash scrypt da senha; mantenha esse arquivo fora do Git.
-3. Inicie o servidor com `npm start` (no Windows, `npm.cmd start` se a política do PowerShell bloquear scripts).
-4. Abra o endereço exibido no terminal (localmente, `http://localhost:3000` com a configuração padrão). O servidor usa `PORT` quando fornecida pela hospedagem; não há porta fixa nos caminhos da aplicação.
-5. Clique três vezes em “Ambientes disponíveis” para abrir `/admin`. Depois do login, o servidor redireciona para `/` e mantém a sessão administrativa.
+1. Três cliques em **Ambientes disponíveis** abrem `/admin`.
+2. O formulário envia as credenciais por HTTPS a uma Netlify Function.
+3. Após o login, o navegador recebe um cookie `HttpOnly`, `Secure` e `SameSite=Strict`, válido por oito horas.
+4. A sessão também é registrada em `adminSessions` no Firestore. A função confere assinatura, expiração e registro em todas as operações; sair revoga a sessão no servidor.
 
-O acesso ao painel continua protegido no servidor. A sessão administrativa permite navegar pelo site sem login Google; confirmar reservas continua exigindo uma conta Google autenticada no Firebase.
+O login Google dos usuários comuns permanece no site principal e continua sendo exigido para criar reservas. As senhas e chaves privadas não são incluídas no HTML/JavaScript nem armazenadas no `localStorage`.
 
-## Publicar em hospedagem Node.js
+### Variáveis de ambiente do Netlify
 
-- Publique a pasta do projeto com `server.js`, `package.json`, `setup-admin.js`, `index.html`, `script.js`, `style.css`, `admin.css` e `imagens/`.
-- Configure o comando de inicialização como `npm start`.
-- Configure `ADMIN_USERNAME` e `ADMIN_PASSWORD_HASH` como variáveis de ambiente secretas. Gere os valores localmente executando `npm run setup:admin`; copie os dois valores criados no `.env` para o painel da hospedagem e não publique nem envie o `.env` ao repositório.
-- Use a variável `PORT` fornecida pela hospedagem. O servidor escuta em `0.0.0.0` por padrão; `HOST` pode ser definido se o provedor exigir outro endereço.
-- Configure `NODE_ENV=production`. Termine HTTPS no provedor ou proxy reverso e force HTTPS para o domínio público. Em produção o cookie administrativo recebe o atributo `Secure`; ele também é `HttpOnly`, `SameSite=Strict`, tem escopo `/` e expira após oito horas.
-- A configuração do Firebase já está no cliente. Autorize o domínio publicado no Firebase Authentication e mantenha as regras do Firestore implantadas.
+No painel do site, abra **Project configuration → Environment variables** e configure as variáveis para as Functions. Marque como secretas as credenciais e restrinja o escopo às Functions quando a interface oferecer essa opção:
 
-As sessões administrativas são guardadas na memória do processo: reiniciar o servidor invalida as sessões, e múltiplas instâncias não compartilham sessões. Para escalar horizontalmente ou persistir sessões entre reinícios, configure um armazenamento de sessão compartilhado (por exemplo, Redis) antes de habilitar várias instâncias.
+- `ADMIN_USERNAME`: usuário administrativo escolhido por você.
+- `ADMIN_PASSWORD_HASH`: hash no formato `scrypt$...`, nunca a senha em texto puro.
+- `ADMIN_SESSION_SECRET`: segredo aleatório de pelo menos 32 bytes. Gere localmente, por exemplo, com `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
+- `FIREBASE_ADMIN_SERVICE_ACCOUNT`: JSON compacto da conta de serviço Firebase, como variável secreta. Essa credencial fica somente no ambiente da função e precisa de acesso ao Firestore.
+- `FIREBASE_ADMIN_PROJECT_ID`: opcional; por padrão é `sistema-agendamento-ct-apc`.
 
-## Gerenciamento administrativo e Firestore
+Crie uma conta de serviço no projeto Firebase com permissão mínima de leitura/gravação no Firestore (por exemplo, **Cloud Datastore User**) e copie seu JSON diretamente para a variável secreta do Netlify; não o salve no repositório. Para gerar o hash localmente, execute `npm run setup:admin` em uma cópia segura do projeto e informe um usuário próprio e uma senha de pelo menos 12 caracteres. O script grava os valores em `.env`, que está ignorado pelo Git. Copie somente `ADMIN_USERNAME` e `ADMIN_PASSWORD_HASH` para as variáveis do Netlify. Se `.env` já existir, o script não o sobrescreve. Nunca publique esse arquivo nem a conta de serviço.
 
-O painel integrado fica no menu **Administração** somente quando o servidor confirmou a sessão administrativa. O login administrativo permanece no backend. O menu não concede privilégios por si só: todas as rotas `/api/admin/*` verificam o cookie de sessão no servidor e as alterações deixam registro em `adminAuditoria`.
+### Firebase e deploy
 
-O backend usa Firebase Admin SDK. O arquivo `.env` atual contém apenas as variáveis do login administrativo; credenciais Firebase Admin não estão configuradas neste ambiente. Até configurá-las, o site preserva o catálogo estático atual, mas o painel e as operações compartilhadas respondem com erro explícito e não gravam dados.
+1. No Firebase Console, mantenha **Authentication → Google** habilitado e autorize o domínio Netlify e o domínio personalizado. O login administrativo não usa Firebase Authentication.
+2. Preserve o projeto e a coleção atuais do Firestore. As reservas existentes continuam em `reservas`; não faça importação nem exclusão durante a publicação.
+3. Instale o Firebase CLI, selecione/autorize o projeto configurado em `.firebaserc` e publique as regras e Cloud Functions existentes:
 
-Para habilitar:
+   ```sh
+   npm install
+   npm install --prefix functions
+   firebase deploy --only firestore:rules,functions
+   ```
 
-1. No Google Cloud/Firebase do projeto `sistema-agendamento-ct-apc`, use uma identidade de serviço do servidor com acesso ao Firestore (papel mínimo recomendado: **Cloud Datastore User**). Não use a chave de administrador no navegador.
-2. Localmente, configure `GOOGLE_APPLICATION_CREDENTIALS` para apontar a um arquivo JSON de conta de serviço guardado fora do repositório, ou configure `FIREBASE_ADMIN_SERVICE_ACCOUNT` com o JSON como segredo de ambiente. Em hospedagem Google Cloud, pode-se usar a identidade de serviço da aplicação e `FIREBASE_ADMIN_USE_ADC=true`. `FIREBASE_ADMIN_PROJECT_ID` é opcional; por padrão usa o projeto Firebase já existente.
-3. Publique as regras de [firestore.rules](./firestore.rules). Reservas continuam legíveis pelo site, mas gravações e mudanças são feitas pelas APIs autenticadas; isso é necessário para o servidor validar o usuário e evitar sobreposição concorrente.
-4. Reinicie o Node.js e abra **Administração**. Na primeira leitura, o backend cria apenas documentos ausentes dos cinco ambientes que já estavam definidos no código, com os mesmos nomes, capacidades, informações, recursos e imagens. IDs determinísticos e transações tornam essa inicialização repetível; documentos encontrados não são sobrescritos. Reservas da coleção `reservas` não são migradas, apagadas nem duplicadas.
+   As Cloud Functions permanecem no projeto: a criação de reservas continua usando transação para impedir conflitos, e a lista pública recebe somente os campos exibidos, sem e-mail/UID.
+4. No Netlify, use a pasta do projeto como **Base directory**. O `netlify.toml` define o comando `npm run build:netlify`, publica `dist/` e mantém `netlify/functions/` fora da pasta publicada. A versão Node configurada para o build é 22; confirme-a em **Project configuration → Build settings** se houver configuração de interface que a substitua.
+5. Publique o site. As rotas `/admin` e `/admin/painel` são reescritas para a tela de login e o painel existente, respectivamente.
 
-As reservas novas são validadas pelo Admin SDK com token de usuário Google e transação Firestore, usando um bloqueio por ambiente e data para serializar agendamentos concorrentes. O fuso padrão do Centro Tecnológico é UTC−3; configure `TECHAGENDA_TIMEZONE_OFFSET_MINUTES=180` se precisar explicitá-lo. Os horários de ambientes são persistidos no documento de cada ambiente.
+As Functions administrativas usam o Firebase Admin SDK no servidor e as validações do store atual: ambientes duplicados não são criados, ambientes com reservas ativas não podem ser excluídos e cancelamentos/exclusões mantêm a auditoria. As regras do Firestore negam gravação direta do navegador em `ambientes`, `reservas`, sessões e auditoria; as Functions confiáveis operam com credenciais de servidor e validam a sessão antes de cada operação.
 
-Imagens podem usar um caminho existente dentro de `imagens/` ou uma URL HTTPS. Upload de arquivos não está incluído e não requeremos Storage sem uma decisão/configuração de armazenamento.
+O formulário mantém a edição da referência da foto por caminho local em `imagens/` ou URL HTTPS. Upload de arquivo para Firebase Storage não está implementado.
+
+## Execução local com o backend antigo
+
+`server.js`, `setup-admin.js` e as rotas administrativas antigas foram mantidos. Para continuar usando o fluxo local, execute `npm run setup:admin` e `npm start`. O backend Node.js local continua usando suas próprias sessões; a hospedagem Netlify usa as Netlify Functions e não precisa de servidor Node.js permanente.
 
 ## Testes
 
-Execute `npm test` (no Windows, `npm.cmd test`). Os testes verificam login, proteção do painel, sessão no site principal, logout e fluxo administrativo. Para executar operações reais do Firestore, configure credenciais do Admin SDK ou use o Emulator Suite.
+Execute `npm test` na pasta do projeto. O build estático do Netlify pode ser validado com `npm run build:netlify`. Para validar operações reais, configure as variáveis do Netlify e use um projeto Firebase de teste antes da publicação final.

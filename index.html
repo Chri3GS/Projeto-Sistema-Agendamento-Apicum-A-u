@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/">
     <meta name="techagenda-admin-session" content="false">
     <title>Agenda CT APC</title>
     <link rel="stylesheet" href="style.css">
@@ -403,7 +404,8 @@
 <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, orderBy, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-functions.js";
 
         // Suas credenciais reais extraídas do painel do seu projeto
         const firebaseConfig = {
@@ -420,10 +422,13 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        const functions = getFunctions(app, "us-central1");
 
         // Compartilha com o seu arquivo script.js externo
         window.db = db;
-        window.firestore = { collection, addDoc, getDocs, query, orderBy, doc, getDoc, setDoc, serverTimestamp };
+        window.firestore = { collection, getDocs, query, orderBy, doc, getDoc, setDoc, serverTimestamp };
+        window.firebaseFunctions = functions;
+        window.firebaseFunctionsApi = { httpsCallable };
         window.firebaseAuth = auth;
         window.firebaseAuthApi = {
             GoogleAuthProvider,

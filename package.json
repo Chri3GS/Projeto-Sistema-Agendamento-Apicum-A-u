@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node server.js",
     "setup:admin": "node setup-admin.js",
+    "admin:claim": "node set-admin-claim.js",
+    "build:netlify": "node build-netlify.js",
     "test": "node --test"
   },
   "dependencies": {

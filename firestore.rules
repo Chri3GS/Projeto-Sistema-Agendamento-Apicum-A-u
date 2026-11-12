@@ -35,8 +35,7 @@ service cloud.firestore {
     }
 
     match /reservas/{reservaId} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if false;
     }
 
     match /agendaLocks/{lockId} {
@@ -44,6 +43,10 @@ service cloud.firestore {
     }
 
     match /adminAuditoria/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /adminSessions/{sessionId} {
       allow read, write: if false;
     }
 
