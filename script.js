@@ -9,6 +9,8 @@ let usuarioLogado = null;
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
 const perfisEmCarregamento = new Map();
+const MAX_IMAGE_UPLOAD_BYTES = 4 * 1024 * 1024;
+let ambientePreviewObjectUrl = null;
 
 // Expediente padrão de funcionamento do Centro Tecnológico (CT)
 const CONFIG_CT = {
@@ -92,6 +94,7 @@ window.addEventListener('DOMContentLoaded', () => {
     atualizarInterfaceUsuario();
     configurarAtalhoAdministrativo();
     configurarFiltrosLista();
+    configurarUploadImagemAmbiente();
     renderizarAmbientes();
     atualizarOpcoesAmbiente();
     carregarAmbientesPublicos();
@@ -366,6 +369,11 @@ function atualizarOpcoesAmbiente() {
     }
 }
 
+function urlImagemAmbiente(source) {
+    if (typeof source !== 'string' || !source) return '';
+    return source.startsWith('imagens/') ? `/${source}` : source;
+}
+
 function renderizarAmbientes() {
     const grid = document.getElementById('grid-ambientes');
     if (!grid) return;
@@ -382,7 +390,7 @@ function renderizarAmbientes() {
         const card = document.createElement('article');
         card.className = 'card';
         const image = document.createElement('img');
-        image.src = ambiente.imagem;
+        image.src = urlImagemAmbiente(ambiente.imagem);
         image.alt = ambiente.nome;
         image.loading = 'lazy';
         const body = document.createElement('div');
@@ -489,7 +497,8 @@ function editarAmbienteAdmin(id) {
     document.getElementById('admin-ambiente-nome').value = ambiente.nome;
     document.getElementById('admin-ambiente-descricao').value = ambiente.descricao;
     document.getElementById('admin-ambiente-capacidade').value = ambiente.capacidade;
-    document.getElementById('admin-ambiente-imagem').value = ambiente.imagem;
+    document.getElementById('admin-ambiente-imagem-arquivo').value = '';
+    mostrarPreviaImagemAmbiente(ambiente.imagem, 'Foto atual');
     document.getElementById('admin-ambiente-informacoes').value = ambiente.informacoes.join('\n');
     document.getElementById('admin-ambiente-recursos').value = ambiente.recursos.join('\n');
     document.getElementById('admin-ambiente-abertura').value = ambiente.abertura;
@@ -506,6 +515,8 @@ function limparFormularioAmbiente() {
     if (!form) return;
     form.reset();
     document.getElementById('admin-ambiente-id').value = '';
+    document.getElementById('admin-ambiente-imagem').value = '';
+    limparPreviaImagemAmbiente();
     document.getElementById('admin-ambiente-abertura').value = '08:00';
     document.getElementById('admin-ambiente-fechamento').value = '18:00';
     document.querySelectorAll('input[name="admin-dia"]').forEach((checkbox) => {
@@ -514,22 +525,131 @@ function limparFormularioAmbiente() {
     document.getElementById('admin-ambiente-ativo').checked = true;
 }
 
+function configurarUploadImagemAmbiente() {
+    const input = document.getElementById('admin-ambiente-imagem-arquivo');
+    if (!input) return;
+    input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const error = validarArquivoImagemAmbiente(file);
+        const message = document.getElementById('admin-ambiente-imagem-erro');
+        if (error) {
+            input.value = '';
+            message.textContent = error;
+            message.hidden = false;
+            restaurarPreviaImagemAmbiente();
+            return;
+        }
+        message.textContent = '';
+        message.hidden = true;
+        if (ambientePreviewObjectUrl) URL.revokeObjectURL(ambientePreviewObjectUrl);
+        ambientePreviewObjectUrl = URL.createObjectURL(file);
+        mostrarPreviaImagemAmbiente(ambientePreviewObjectUrl, file.name, true);
+    });
+}
+
+function validarArquivoImagemAmbiente(file) {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        return 'Escolha uma imagem JPG, PNG ou WebP.';
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+        return 'A imagem deve ter no máximo 4 MB.';
+    }
+    return '';
+}
+
+function mostrarPreviaImagemAmbiente(source, label, isObjectUrl = false) {
+    const preview = document.getElementById('admin-ambiente-imagem-previa');
+    if (!preview) return;
+    if (ambientePreviewObjectUrl && !isObjectUrl) {
+        URL.revokeObjectURL(ambientePreviewObjectUrl);
+        ambientePreviewObjectUrl = null;
+    }
+    document.getElementById('admin-ambiente-imagem').value = isObjectUrl
+        ? document.getElementById('admin-ambiente-imagem').value
+        : source || '';
+    preview.src = urlImagemAmbiente(source);
+    preview.hidden = !source;
+    document.getElementById('admin-ambiente-imagem-nome').textContent = source
+        ? label
+        : 'Nenhuma imagem selecionada';
+}
+
+function restaurarPreviaImagemAmbiente() {
+    const imagePath = document.getElementById('admin-ambiente-imagem').value;
+    mostrarPreviaImagemAmbiente(imagePath, imagePath ? 'Foto atual' : '');
+}
+
+function limparPreviaImagemAmbiente() {
+    const preview = document.getElementById('admin-ambiente-imagem-previa');
+    if (ambientePreviewObjectUrl) {
+        URL.revokeObjectURL(ambientePreviewObjectUrl);
+        ambientePreviewObjectUrl = null;
+    }
+    preview.removeAttribute('src');
+    preview.hidden = true;
+    document.getElementById('admin-ambiente-imagem-nome').textContent = 'Nenhuma imagem selecionada';
+    const error = document.getElementById('admin-ambiente-imagem-erro');
+    error.textContent = '';
+    error.hidden = true;
+}
+
+async function enviarImagemAmbiente(file) {
+    const response = await fetch('/.netlify/functions/environment-images', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': file.type },
+        body: file
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(result.error || 'Não foi possível enviar a imagem. Tente novamente.');
+    }
+    return result.image;
+}
+
 async function salvarAmbienteAdmin(event) {
     event.preventDefault();
     const id = document.getElementById('admin-ambiente-id').value;
-    const data = {
-        nome: document.getElementById('admin-ambiente-nome').value,
-        descricao: document.getElementById('admin-ambiente-descricao').value,
-        capacidade: Number(document.getElementById('admin-ambiente-capacidade').value),
-        imagem: document.getElementById('admin-ambiente-imagem').value,
-        informacoes: document.getElementById('admin-ambiente-informacoes').value.split('\n').map((item) => item.trim()).filter(Boolean),
-        recursos: document.getElementById('admin-ambiente-recursos').value.split('\n').map((item) => item.trim()).filter(Boolean),
-        abertura: document.getElementById('admin-ambiente-abertura').value,
-        fechamento: document.getElementById('admin-ambiente-fechamento').value,
-        diasDisponiveis: [...document.querySelectorAll('input[name="admin-dia"]:checked')].map((checkbox) => Number(checkbox.value)),
-        ativo: document.getElementById('admin-ambiente-ativo').checked
-    };
+    const imageInput = document.getElementById('admin-ambiente-imagem-arquivo');
+    const imageFile = imageInput.files && imageInput.files[0];
+    const saveButton = document.querySelector('#form-admin-ambiente button[type="submit"]');
+    if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = imageFile ? 'Enviando imagem...' : 'Salvando...';
+    }
     try {
+        if (imageFile) {
+            const imageError = validarArquivoImagemAmbiente(imageFile);
+            if (imageError) throw new Error(imageError);
+        }
+        let imagem = document.getElementById('admin-ambiente-imagem').value;
+        if (!imagem && !imageFile) {
+            throw new Error('Escolha uma imagem para este ambiente.');
+        }
+        if (imageFile) {
+            if (!window.techAgendaNetlifyAdminSession) {
+                throw new Error('O envio de imagens exige uma sessão administrativa do Netlify.');
+            }
+            imagem = await enviarImagemAmbiente(imageFile);
+            document.getElementById('admin-ambiente-imagem').value = imagem;
+            imageInput.value = '';
+            mostrarPreviaImagemAmbiente(imagem, 'Imagem enviada');
+            if (saveButton) saveButton.textContent = 'Salvando...';
+        }
+        const data = {
+            nome: document.getElementById('admin-ambiente-nome').value,
+            descricao: document.getElementById('admin-ambiente-descricao').value,
+            capacidade: Number(document.getElementById('admin-ambiente-capacidade').value),
+            imagem,
+            informacoes: document.getElementById('admin-ambiente-informacoes').value.split('\n').map((item) => item.trim()).filter(Boolean),
+            recursos: document.getElementById('admin-ambiente-recursos').value.split('\n').map((item) => item.trim()).filter(Boolean),
+            abertura: document.getElementById('admin-ambiente-abertura').value,
+            fechamento: document.getElementById('admin-ambiente-fechamento').value,
+            diasDisponiveis: [...document.querySelectorAll('input[name="admin-dia"]:checked')].map((checkbox) => Number(checkbox.value)),
+            ativo: document.getElementById('admin-ambiente-ativo').checked
+        };
         if (window.techAgendaNetlifyAdminSession) {
             await apiNetlifyAdmin('saveEnvironment', { id: id || null, data });
         } else if (window.techAgendaAdminSession) {
@@ -545,6 +665,11 @@ async function salvarAmbienteAdmin(event) {
         mostrarStatusAdmin('Ambiente salvo com sucesso.', 'sucesso');
     } catch (error) {
         mostrarStatusAdmin(error.message);
+    } finally {
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.textContent = 'Salvar ambiente';
+        }
     }
 }
 
@@ -758,7 +883,7 @@ function trocarFotoReserva() {
     const ambiente = ambientesCadastrados.find((item) => item.nome === selectAmbiente.value);
     const sala = ambiente || dadosSalas[selectAmbiente.value] || dadosSalas["Biblioteca"];
     const foto = ambiente ? ambiente.imagem : sala.foto;
-    imagem.src = foto || "imagens/biblioteca.jpeg";
+    imagem.src = urlImagemAmbiente(foto || "imagens/biblioteca.jpeg");
     
     if (badgeInfo) {
         const capacidade = ambiente ? `${ambiente.capacidade} pessoas` : sala.capacidade;

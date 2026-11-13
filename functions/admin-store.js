@@ -85,9 +85,11 @@ function validateEnvironment(input) {
         throw new StoreError(400, 'Capacidade deve ser um número inteiro entre 1 e 10000.');
     }
     const imagem = requiredText(input.imagem, 'Imagem', 1000);
+    const netlifyImage = /^\/\.netlify\/functions\/environment-images\?key=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i.test(imagem);
     if (!/^imagens\/[A-Za-z0-9._ -]+$/.test(imagem) &&
-        !(imagem.startsWith('https://') && !/[\s"'<>]/.test(imagem))) {
-        throw new StoreError(400, 'A imagem deve ser um caminho em imagens/ ou uma URL HTTPS.');
+        !(imagem.startsWith('https://') && !/[\s"'<>]/.test(imagem)) &&
+        !netlifyImage) {
+        throw new StoreError(400, 'A imagem deve ser um caminho existente, URL HTTPS ou imagem enviada pelo sistema.');
     }
     const abertura = input.abertura;
     const fechamento = input.fechamento;

@@ -39,7 +39,11 @@ Crie uma conta de serviço no projeto Firebase com permissão mínima de leitura
 
 As Functions administrativas usam o Firebase Admin SDK no servidor e as validações do store atual: ambientes duplicados não são criados, ambientes com reservas ativas não podem ser excluídos e cancelamentos/exclusões mantêm a auditoria. A função de reservas valida o token Firebase do usuário e usa transações para evitar sobreposição de horários. As regras do Firestore negam gravação direta do navegador em `ambientes`, `reservas`, sessões e auditoria; as Functions confiáveis operam com credenciais de servidor. Credenciais de serviço devem permanecer somente nas variáveis secretas do Netlify, nunca no frontend.
 
-O formulário mantém a edição da referência da foto por caminho local em `imagens/` ou URL HTTPS. Upload de arquivo para Firebase Storage não está implementado.
+### Fotos dos ambientes
+
+O painel envia JPG, PNG ou WebP de até 4 MB para o armazenamento persistente Netlify Blobs por uma Netlify Function protegida pela sessão administrativa. O servidor confere tipo, assinatura do arquivo e tamanho; o Firestore guarda somente o caminho de referência. Na edição, a foto atual permanece quando nenhuma nova é selecionada. As imagens dos ambientes existentes em `imagens/` e URLs HTTPS continuam aceitas.
+
+Esta implementação usa Netlify Blobs, sem provisionar Firebase Storage nem mudar o plano do Firebase. A documentação oficial do Firebase informa que Cloud Storage for Firebase não está disponível no plano Spark e requer Blaze ([requisitos do Spark/Blaze](https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024)). A página atual de [preços da Netlify](https://www.netlify.com/pricing/) inclui Blob storage no plano Free, sujeito aos limites/créditos de uso da conta; consulte o painel de faturamento do seu site antes de qualquer upgrade. Nenhuma cobrança ou recarga automática é configurada pelo código. Consulte também a [documentação de Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/).
 
 ## Execução local com o backend antigo
 

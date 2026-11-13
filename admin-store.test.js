@@ -87,8 +87,14 @@ test('não duplica ambientes existentes com identificador legado ao inicializar 
 
 test('valida campos, horários, capacidade e origem de imagem dos ambientes', () => {
     assert.equal(validateEnvironment(validEnvironment).capacidade, 12);
+    const uploadedImage = '/.netlify/functions/environment-images?key=123e4567-e89b-12d3-a456-426614174000.webp';
+    assert.equal(validateEnvironment({ ...validEnvironment, imagem: uploadedImage }).imagem, uploadedImage);
     assert.throws(() => validateEnvironment({ ...validEnvironment, capacidade: 0 }), StoreError);
     assert.throws(() => validateEnvironment({ ...validEnvironment, imagem: 'javascript:alert(1)' }), StoreError);
+    assert.throws(() => validateEnvironment({
+        ...validEnvironment,
+        imagem: '/.netlify/functions/environment-images?key=../../other.png'
+    }), StoreError);
     assert.throws(() => validateEnvironment({ ...validEnvironment, fechamento: '07:00' }), StoreError);
     assert.throws(() => validateEnvironment({ ...validEnvironment, diasDisponiveis: [8] }), StoreError);
 });

@@ -163,7 +163,18 @@
                     <label>Nome<input id="admin-ambiente-nome" maxlength="100" required></label>
                     <label>Descrição<input id="admin-ambiente-descricao" maxlength="500" required></label>
                     <label>Capacidade (pessoas)<input id="admin-ambiente-capacidade" type="number" min="1" max="10000" required></label>
-                    <label>Imagem (caminho do site ou URL HTTPS)<input id="admin-ambiente-imagem" maxlength="1000" placeholder="imagens/sala01.jpeg" required></label>
+                    <div class="admin-image-field">
+                        <label class="admin-image-label" for="admin-ambiente-imagem-arquivo">Imagem do ambiente</label>
+                        <input type="hidden" id="admin-ambiente-imagem">
+                        <div class="admin-image-picker">
+                            <input id="admin-ambiente-imagem-arquivo" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                            <button class="btn-info" type="button" onclick="document.getElementById('admin-ambiente-imagem-arquivo').click()">Escolher imagem</button>
+                            <span id="admin-ambiente-imagem-nome" aria-live="polite">Nenhuma imagem selecionada</span>
+                        </div>
+                        <img id="admin-ambiente-imagem-previa" class="admin-image-preview" alt="Prévia da imagem do ambiente" hidden>
+                        <p class="admin-image-help">JPG, PNG ou WebP. Tamanho máximo: 4 MB.</p>
+                        <p id="admin-ambiente-imagem-erro" class="admin-image-error" role="alert" hidden></p>
+                    </div>
                     <label>Informações (uma por linha)<textarea id="admin-ambiente-informacoes" rows="3"></textarea></label>
                     <label>Recursos (um por linha)<textarea id="admin-ambiente-recursos" rows="3"></textarea></label>
                     <label>Abre às<input id="admin-ambiente-abertura" type="time" required></label>
