@@ -1308,17 +1308,12 @@ async function salvarReserva() {
                 horaFim,
                 motivo
         };
-        let savedReservation;
-        if (window.techAgendaAdminSession) {
-            const token = await firebaseUser.getIdToken();
-            savedReservation = await apiJson('/api/reservas', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-                body: JSON.stringify(reservationData)
-            });
-        } else {
-            savedReservation = await chamarFuncaoFirebase('createReservation', reservationData);
-        }
+        const token = await firebaseUser.getIdToken();
+        const savedReservation = await apiJson('/.netlify/functions/reservations', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: JSON.stringify(reservationData)
+        });
         novaReserva.id = savedReservation.id;
 
         // Atualiza o cache apenas após a confirmação da gravação na nuvem.

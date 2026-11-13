@@ -27,19 +27,17 @@ Crie uma conta de serviço no projeto Firebase com permissão mínima de leitura
 
 1. No Firebase Console, mantenha **Authentication → Google** habilitado e autorize o domínio Netlify e o domínio personalizado. O login administrativo não usa Firebase Authentication.
 2. Preserve o projeto e a coleção atuais do Firestore. As reservas existentes continuam em `reservas`; não faça importação nem exclusão durante a publicação.
-3. Instale o Firebase CLI, selecione/autorize o projeto configurado em `.firebaserc` e publique as regras e Cloud Functions existentes:
+3. Mantenha as regras do Firestore que negam gravações diretas do navegador. A criação de reservas agora é feita por `/.netlify/functions/reservations`, que valida o token Firebase no servidor e usa a transação do store existente; não depende de Cloud Functions nem de plano Blaze.
 
    ```sh
-   npm install
-   npm install --prefix functions
-   firebase deploy --only firestore:rules,functions
+   npm test
+   npm run build:netlify
    ```
 
-   As Cloud Functions permanecem no projeto: a criação de reservas continua usando transação para impedir conflitos, e a lista pública recebe somente os campos exibidos, sem e-mail/UID.
 4. No Netlify, use a pasta do projeto como **Base directory**. O `netlify.toml` define o comando `npm run build:netlify`, publica `dist/` e mantém `netlify/functions/` fora da pasta publicada. A versão Node configurada para o build é 22; confirme-a em **Project configuration → Build settings** se houver configuração de interface que a substitua.
-5. Publique o site. As rotas `/admin` e `/admin/painel` são reescritas para a tela de login e o painel existente, respectivamente.
+5. Publique a alteração no Netlify pelo deploy do commit/branch atualizado ou por **Deploy site → Trigger deploy**. As rotas `/admin` e `/admin/painel` continuam inalteradas.
 
-As Functions administrativas usam o Firebase Admin SDK no servidor e as validações do store atual: ambientes duplicados não são criados, ambientes com reservas ativas não podem ser excluídos e cancelamentos/exclusões mantêm a auditoria. As regras do Firestore negam gravação direta do navegador em `ambientes`, `reservas`, sessões e auditoria; as Functions confiáveis operam com credenciais de servidor e validam a sessão antes de cada operação.
+As Functions administrativas usam o Firebase Admin SDK no servidor e as validações do store atual: ambientes duplicados não são criados, ambientes com reservas ativas não podem ser excluídos e cancelamentos/exclusões mantêm a auditoria. A função de reservas valida o token Firebase do usuário e usa transações para evitar sobreposição de horários. As regras do Firestore negam gravação direta do navegador em `ambientes`, `reservas`, sessões e auditoria; as Functions confiáveis operam com credenciais de servidor. Credenciais de serviço devem permanecer somente nas variáveis secretas do Netlify, nunca no frontend.
 
 O formulário mantém a edição da referência da foto por caminho local em `imagens/` ou URL HTTPS. Upload de arquivo para Firebase Storage não está implementado.
 
