@@ -4,8 +4,8 @@
 
 O acesso administrativo no Netlify usa usuário e senha, sem exigir login Google:
 
-1. Três cliques em **Ambientes disponíveis** abrem `/admin`.
-2. O formulário envia as credenciais por HTTPS a uma Netlify Function.
+1. No modal **Entrar no Sistema**, selecionar **Administrador** abre `/admin`; a seleção não autentica nem concede privilégios.
+2. O formulário existente de `/admin` envia as credenciais por HTTPS a uma Netlify Function.
 3. Após o login, o navegador recebe um cookie `HttpOnly`, `Secure` e `SameSite=Strict`, válido por oito horas.
 4. A sessão também é registrada em `adminSessions` no Firestore. A função confere assinatura, expiração e registro em todas as operações; sair revoga a sessão no servidor.
 

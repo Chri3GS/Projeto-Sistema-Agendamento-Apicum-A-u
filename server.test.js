@@ -174,59 +174,40 @@ test('recusa corpos JSON acima do limite sem executar a operação administrativ
     }
 });
 
-test('fluxo completo por uma origem: título, login, site autenticado e logout', async () => {
+test('fluxo completo por uma origem: seleção administrativa, login, site autenticado e logout', async () => {
     const home = await fetch(`${baseUrl}/`);
     assert.equal(home.status, 200);
-    assert.match(await home.text(), /Ambientes disponíveis/);
+    const homeHtml = await home.text();
+    assert.match(homeHtml, /Ambientes disponíveis/);
 
     const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
-    const start = script.indexOf('function configurarAtalhoAdministrativo()');
-    const end = script.indexOf('function showSection', start);
-    assert.ok(start >= 0 && end > start, 'encontrou o handler usado pelo título');
+    const start = script.indexOf('function selecionarTipoUsuario()');
+    const end = script.indexOf('function isAdminRoute', start);
+    assert.ok(start >= 0 && end > start, 'encontrou o handler de seleção do tipo de usuário');
+    assert.match(homeHtml, /<option value="Administrador">Administrador<\/option>/);
+    assert.doesNotMatch(homeHtml, /<option value="Professor">Professor<\/option>/);
+    assert.doesNotMatch(script, /configurarAtalhoAdministrativo/);
 
-    let clickHandler;
     let adminPath;
-    let now = 10000;
-    class FakeDate extends Date {
-        static now() {
-            return now;
-        }
-    }
-
-    const title = {
-        textContent: 'Ambientes disponíveis',
-        addEventListener(eventName, handler) {
-            assert.equal(eventName, 'click');
-            clickHandler = handler;
-        }
-    };
+    const selectedType = { value: 'Aluno' };
     const browser = {
-        document: {
-            querySelectorAll(selector) {
-                assert.equal(selector, '#home h1');
-                return [title];
-            }
-        },
+        document: { getElementById: () => selectedType },
         window: {
             location: {
                 assign(location) {
                     adminPath = new URL(location, baseUrl).pathname;
                 }
             }
-        },
-        Date: FakeDate,
-        Array
+        }
     };
-    vm.runInNewContext(
-        `${script.slice(start, end)}; configurarAtalhoAdministrativo();`,
+    const selecionarTipo = vm.runInNewContext(
+        `${script.slice(start, end)}; selecionarTipoUsuario;`,
         browser
     );
-
-    clickHandler();
-    now += 300;
-    clickHandler();
-    now += 300;
-    clickHandler();
+    selecionarTipo();
+    assert.equal(adminPath, undefined, 'Aluno continua no fluxo normal de login Google');
+    selectedType.value = 'Administrador';
+    selecionarTipo();
     assert.equal(adminPath, '/admin');
 
     const loginPage = await fetch(new URL(adminPath, baseUrl));

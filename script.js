@@ -92,7 +92,6 @@ window.addEventListener('DOMContentLoaded', () => {
         };
     }
     atualizarInterfaceUsuario();
-    configurarAtalhoAdministrativo();
     configurarFiltrosLista();
     configurarUploadImagemAmbiente();
     renderizarAmbientes();
@@ -157,28 +156,10 @@ window.addEventListener('DOMContentLoaded', () => {
     atualizarTabela();
 });
 
-function configurarAtalhoAdministrativo() {
-    const tituloAmbientes = Array.from(document.querySelectorAll('#home h1'))
-        .find((titulo) => titulo.textContent.trim() === 'Ambientes disponíveis');
-    if (!tituloAmbientes) return;
-
-    let quantidadeCliques = 0;
-    let inicioSequencia = 0;
-    tituloAmbientes.addEventListener('click', () => {
-        const agora = Date.now();
-        if (agora - inicioSequencia > 2000) {
-            quantidadeCliques = 1;
-            inicioSequencia = agora;
-            return;
-        }
-
-        quantidadeCliques += 1;
-        if (quantidadeCliques === 3) {
-            quantidadeCliques = 0;
-            inicioSequencia = 0;
-            window.location.assign('/admin');
-        }
-    });
+function selecionarTipoUsuario() {
+    if (document.getElementById('cad-tipo')?.value === 'Administrador') {
+        window.location.assign('/admin');
+    }
 }
 
 function isAdminRoute() {
