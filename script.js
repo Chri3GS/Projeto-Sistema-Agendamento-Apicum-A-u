@@ -1497,9 +1497,19 @@ async function atualizarTabela() {
     tbody.innerHTML = "<tr><td class='reservation-list-empty' colspan='4'>Carregando reservas...</td></tr>";
 
     try {
-        const listaDocs = await chamarFuncaoFirebase('publicReservations', {}, false);
+        const response = await fetch('/.netlify/functions/public-reservations', {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        });
+        const listaDocs = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(listaDocs.error || `Falha ao carregar reservas (${response.status}).`);
+        }
         if (!Array.isArray(listaDocs)) {
-            throw new Error('A resposta do Firestore não contém uma lista de reservas válida.');
+            throw new Error('A resposta do servidor não contém uma lista de reservas válida.');
         }
         todasAsReservas = listaDocs;
         reservas = [...listaDocs];
@@ -1517,7 +1527,7 @@ async function atualizarTabela() {
         const cell = row.insertCell();
         cell.colSpan = 4;
         cell.className = 'reservation-list-empty';
-        cell.textContent = 'Não foi possível carregar as reservas do Firestore. Tente novamente mais tarde.';
+        cell.textContent = error.message || 'Não foi possível carregar as reservas. Tente novamente mais tarde.';
         const resultCount = document.getElementById('lista-resultado-count');
         if (resultCount) resultCount.textContent = 'Reservas indisponíveis no momento.';
     }

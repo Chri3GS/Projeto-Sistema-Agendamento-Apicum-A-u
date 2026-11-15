@@ -27,7 +27,7 @@ Crie uma conta de serviço no projeto Firebase com permissão mínima de leitura
 
 1. No Firebase Console, mantenha **Authentication → Google** habilitado e autorize o domínio Netlify e o domínio personalizado. O login administrativo não usa Firebase Authentication.
 2. Preserve o projeto e a coleção atuais do Firestore. As reservas existentes continuam em `reservas`; não faça importação nem exclusão durante a publicação. A lista pública e o painel administrativo consultam essa coleção no mesmo projeto; a lista não substitui falhas do Firestore por cópias locais.
-3. Mantenha as regras do Firestore que negam gravações diretas do navegador. A criação de reservas agora é feita por `/.netlify/functions/reservations`, que valida o token Firebase no servidor e usa a transação do store existente; não depende de Cloud Functions nem de plano Blaze.
+3. Mantenha as regras do Firestore que negam leituras e gravações diretas do navegador na coleção `reservas`. A lista pública carrega `/.netlify/functions/public-reservations`, que consulta o Firestore no servidor e retorna somente os campos públicos necessários. A criação de reservas é feita por `/.netlify/functions/reservations`, que valida o token Firebase no servidor e usa a transação do store existente; não depende de Cloud Functions nem de plano Blaze.
 
    ```sh
    npm test

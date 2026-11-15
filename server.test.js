@@ -269,8 +269,10 @@ test('lista pública não substitui falhas do Firestore por reservas do cache lo
             querySelector: () => tbody,
             getElementById: () => null
         },
-        chamarFuncaoFirebase: async () => {
-            throw new Error('Firestore indisponível');
+        fetch: async (url, options) => {
+            assert.equal(url, '/.netlify/functions/public-reservations');
+            assert.equal(options.method, 'POST');
+            throw new Error('Netlify Function indisponível');
         },
         atualizarResumoLista: (reservations) => assert.deepEqual(Array.from(reservations), []),
         atualizarFiltroAmbientesLista: (reservations) => assert.deepEqual(Array.from(reservations), []),
@@ -287,7 +289,7 @@ test('lista pública não substitui falhas do Firestore por reservas do cache lo
 
     assert.deepEqual(Array.from(browser.reservas), []);
     assert.deepEqual(Array.from(browser.todasAsReservas), []);
-    assert.match(message, /Não foi possível carregar as reservas do Firestore/);
+    assert.match(message, /Netlify Function indisponível/);
 });
 
 test('parser de reservas entende o formato de data usado pelo backend', () => {
