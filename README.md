@@ -19,14 +19,14 @@ No painel do site, abra **Project configuration → Environment variables** e co
 - `ADMIN_PASSWORD_HASH`: hash no formato `scrypt$...`, nunca a senha em texto puro.
 - `ADMIN_SESSION_SECRET`: segredo aleatório de pelo menos 32 bytes. Gere localmente, por exemplo, com `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
 - `FIREBASE_ADMIN_SERVICE_ACCOUNT`: JSON compacto da conta de serviço Firebase, como variável secreta. Essa credencial fica somente no ambiente da função e precisa de acesso ao Firestore.
-- `FIREBASE_ADMIN_PROJECT_ID`: opcional; por padrão é `sistema-agendamento-ct-apc`.
+- `FIREBASE_ADMIN_PROJECT_ID`: opcional; se definida, deve ser `sistema-agendamento-ct-apc`, o mesmo projeto configurado no site. As Functions do Netlify rejeitam um valor divergente para evitar consultar outra coleção/projeto.
 
 Crie uma conta de serviço no projeto Firebase com permissão mínima de leitura/gravação no Firestore (por exemplo, **Cloud Datastore User**) e copie seu JSON diretamente para a variável secreta do Netlify; não o salve no repositório. Para gerar o hash localmente, execute `npm run setup:admin` em uma cópia segura do projeto e informe um usuário próprio e uma senha de pelo menos 12 caracteres. O script grava os valores em `.env`, que está ignorado pelo Git. Copie somente `ADMIN_USERNAME` e `ADMIN_PASSWORD_HASH` para as variáveis do Netlify. Se `.env` já existir, o script não o sobrescreve. Nunca publique esse arquivo nem a conta de serviço.
 
 ### Firebase e deploy
 
 1. No Firebase Console, mantenha **Authentication → Google** habilitado e autorize o domínio Netlify e o domínio personalizado. O login administrativo não usa Firebase Authentication.
-2. Preserve o projeto e a coleção atuais do Firestore. As reservas existentes continuam em `reservas`; não faça importação nem exclusão durante a publicação.
+2. Preserve o projeto e a coleção atuais do Firestore. As reservas existentes continuam em `reservas`; não faça importação nem exclusão durante a publicação. A lista pública e o painel administrativo consultam essa coleção no mesmo projeto; a lista não substitui falhas do Firestore por cópias locais.
 3. Mantenha as regras do Firestore que negam gravações diretas do navegador. A criação de reservas agora é feita por `/.netlify/functions/reservations`, que valida o token Firebase no servidor e usa a transação do store existente; não depende de Cloud Functions nem de plano Blaze.
 
    ```sh

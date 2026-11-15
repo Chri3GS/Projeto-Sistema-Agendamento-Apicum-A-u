@@ -102,6 +102,9 @@ test('valida campos, horários, capacidade e origem de imagem dos ambientes', ()
 test('calcula situação de reserva e reconhece cancelamentos', () => {
     const now = Date.UTC(2026, 10, 2, 15, 0);
     assert.equal(reservationStatus({ status: 'cancelada' }, now), 'cancelada');
+    assert.equal(reservationStatus({ status: 'cancelled' }, now), 'cancelada');
+    assert.equal(reservationStatus({ canceladoEm: '2026-11-01T10:00:00.000Z' }, now), 'cancelada');
+    assert.equal(reservationStatus({ status: 'concluida' }, now), 'concluida');
     assert.equal(reservationStatus({
         dataReserva: '2026-11-02',
         horaInicio: '10:00',
@@ -112,4 +115,38 @@ test('calcula situação de reserva e reconhece cancelamentos', () => {
         horaInicio: '10:00',
         horaFim: '11:00'
     }, now), 'ativa');
+});
+
+test('dashboard administrativo inclui reservas de todos os usuários', async () => {
+    const reservationDocuments = [
+        { id: 'reserva-aluno-a', data: () => ({ usuarioUid: 'aluno-a', usuario: 'Aluno A' }) },
+        { id: 'reserva-aluno-b', data: () => ({ usuarioUid: 'aluno-b', usuario: 'Aluno B' }) }
+    ];
+    const environments = {
+        doc: (id) => ({ id }),
+        get: async () => ({ docs: [] })
+    };
+    const reservations = {
+        get: async () => ({ docs: reservationDocuments })
+    };
+    const db = {
+        collection(name) {
+            return name === 'ambientes' ? environments : reservations;
+        },
+        runTransaction(operation) {
+            return operation({ get: async () => ({ exists: true }) });
+        }
+    };
+    const store = createAdminStore({
+        db,
+        auth: {},
+        FieldValue: { serverTimestamp: () => 'timestamp' }
+    });
+
+    const dashboard = await store.getDashboard();
+
+    assert.deepEqual(dashboard.reservas.map(({ id }) => id), [
+        'reserva-aluno-a',
+        'reserva-aluno-b'
+    ]);
 });

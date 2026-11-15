@@ -15,8 +15,7 @@ function getRuntime() {
         throw new Error('FIREBASE_ADMIN_SERVICE_ACCOUNT não foi configurada no ambiente Netlify.');
     }
     const serviceAccount = JSON.parse(encodedAccount);
-    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID ||
-        serviceAccount.project_id || FIREBASE_PROJECT_ID;
+    const projectId = getConfiguredProjectId();
     const app = getApps().find((item) => item.name === 'techagenda-netlify-admin') ||
         initializeApp({
             credential: cert(serviceAccount),
@@ -29,6 +28,14 @@ function getRuntime() {
         store: createAdminStore({ db, auth: getAuth(app), FieldValue })
     };
     return runtime;
+}
+
+function getConfiguredProjectId() {
+    const configuredProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+    if (configuredProjectId && configuredProjectId !== FIREBASE_PROJECT_ID) {
+        throw new Error(`FIREBASE_ADMIN_PROJECT_ID deve ser "${FIREBASE_PROJECT_ID}" para corresponder ao projeto Firebase do site.`);
+    }
+    return FIREBASE_PROJECT_ID;
 }
 
 function sendJson(statusCode, data, extraHeaders = {}) {
@@ -107,6 +114,7 @@ function storeErrorResponse(error) {
 
 module.exports = {
     getAdminSession,
+    getConfiguredProjectId,
     getRuntime,
     hasJsonContentType,
     parseJson,

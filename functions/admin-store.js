@@ -157,7 +157,15 @@ function intervalForReservation(reservation) {
 }
 
 function reservationStatus(reservation, now = Date.now()) {
-    if (reservation.status === 'cancelada') return 'cancelada';
+    const status = String(reservation.status || reservation.situacao || '').toLocaleLowerCase('pt-BR');
+    if (reservation.canceladoEm ||
+        ['cancelada', 'cancelado', 'cancelled', 'canceled'].includes(status)) {
+        return 'cancelada';
+    }
+    if (['concluida', 'concluída', 'concluído', 'concluido',
+        'completed', 'finalizada', 'finalizado'].includes(status)) {
+        return 'concluida';
+    }
     const interval = intervalForReservation(reservation);
     if (!interval) return 'ativa';
     const end = institutionalTime(interval.date, interval.end);

@@ -2,7 +2,22 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { test } = require('node:test');
 const { createSessionToken } = require('../shared/admin-security');
-const { getAdminSession } = require('../shared/runtime');
+const { getAdminSession, getConfiguredProjectId } = require('../shared/runtime');
+
+test('Netlify Admin SDK usa o projeto Firebase do site e rejeita override divergente', (context) => {
+    const previousProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+    context.after(() => {
+        if (previousProjectId === undefined) delete process.env.FIREBASE_ADMIN_PROJECT_ID;
+        else process.env.FIREBASE_ADMIN_PROJECT_ID = previousProjectId;
+    });
+
+    delete process.env.FIREBASE_ADMIN_PROJECT_ID;
+    assert.equal(getConfiguredProjectId(), 'sistema-agendamento-ct-apc');
+    process.env.FIREBASE_ADMIN_PROJECT_ID = 'sistema-agendamento-ct-apc';
+    assert.equal(getConfiguredProjectId(), 'sistema-agendamento-ct-apc');
+    process.env.FIREBASE_ADMIN_PROJECT_ID = 'outro-projeto';
+    assert.throws(getConfiguredProjectId, /deve ser "sistema-agendamento-ct-apc"/);
+});
 
 test('requires a valid signature and a matching active Firestore session for every request', async (context) => {
     const previousUsername = process.env.ADMIN_USERNAME;

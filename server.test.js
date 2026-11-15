@@ -244,3 +244,66 @@ test('fluxo completo por uma origem: seleção administrativa, login, site auten
     assert.equal(homeAfterLogout.status, 200);
     assert.match(await homeAfterLogout.text(), /name="techagenda-admin-session" content="false"/);
 });
+
+test('lista pública não substitui falhas do Firestore por reservas do cache local', async () => {
+    const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+    const start = script.indexOf('async function atualizarTabela()');
+    const end = script.indexOf('function configurarFiltrosLista()', start);
+    assert.ok(start >= 0 && end > start, 'encontrou a atualização da lista pública');
+
+    let message = '';
+    const cell = {};
+    Object.defineProperty(cell, 'textContent', {
+        set(value) {
+            message = value;
+        }
+    });
+    const tbody = {
+        replaceChildren() {},
+        insertRow() {
+            return { insertCell: () => cell };
+        }
+    };
+    const browser = {
+        document: {
+            querySelector: () => tbody,
+            getElementById: () => null
+        },
+        chamarFuncaoFirebase: async () => {
+            throw new Error('Firestore indisponível');
+        },
+        atualizarResumoLista: (reservations) => assert.deepEqual(Array.from(reservations), []),
+        atualizarFiltroAmbientesLista: (reservations) => assert.deepEqual(Array.from(reservations), []),
+        console: { error() {} },
+        reservas: [{ id: 'cache-antigo' }],
+        todasAsReservas: [{ id: 'cache-antigo' }]
+    };
+    const atualizarTabela = vm.runInNewContext(
+        `${script.slice(start, end)}; atualizarTabela;`,
+        browser
+    );
+
+    await atualizarTabela();
+
+    assert.deepEqual(Array.from(browser.reservas), []);
+    assert.deepEqual(Array.from(browser.todasAsReservas), []);
+    assert.match(message, /Não foi possível carregar as reservas do Firestore/);
+});
+
+test('parser de reservas entende o formato de data usado pelo backend', () => {
+    const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+    const start = script.indexOf('function extrairIntervaloReserva(res)');
+    const end = script.indexOf('// Verifica se um determinado período', start);
+    assert.ok(start >= 0 && end > start, 'encontrou o parser dos intervalos');
+    const extrairIntervaloReserva = vm.runInNewContext(
+        `${script.slice(start, end)}; extrairIntervaloReserva;`
+    );
+
+    const interval = extrairIntervaloReserva({
+        data: '20/11/2026 das 08:00 às 09:00'
+    });
+
+    assert.equal(interval.dataStr, '2026-11-20');
+    assert.equal(interval.horaInicio, '08:00');
+    assert.equal(interval.horaFim, '09:00');
+});

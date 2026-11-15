@@ -3,8 +3,8 @@
 // ==========================================
 
 // Armazenamento local e em memória
-let reservas = JSON.parse(localStorage.getItem('reservas_salvas')) || [];
-let todasAsReservas = [...reservas]; // Cache unificado de reservas (Nuvem + Local)
+let reservas = [];
+let todasAsReservas = [...reservas]; // Cache em memória das reservas confirmadas no servidor
 let usuarioLogado = null;
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
@@ -1070,6 +1070,16 @@ function extrairIntervaloReserva(res) {
                 inicio = new Date(Number(m1[3]), Number(m1[2]) - 1, Number(m1[1]), Number(m1[4]), Number(m1[5]));
                 fim = new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1]), Number(m2[4]), Number(m2[5]));
             }
+        } else {
+            const match = res.data.match(
+                /(\d{2})\/(\d{2})\/(\d{4})\s+das\s+(\d{2}:\d{2})\s+às\s+(\d{2}:\d{2})/
+            );
+            if (match) {
+                inicio = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]),
+                    Number(match[4].slice(0, 2)), Number(match[4].slice(3, 5)));
+                fim = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]),
+                    Number(match[5].slice(0, 2)), Number(match[5].slice(3, 5)));
+            }
         }
     }
 
@@ -1422,10 +1432,9 @@ async function salvarReserva() {
         });
         novaReserva.id = savedReservation.id;
 
-        // Atualiza o cache apenas após a confirmação da gravação na nuvem.
+        // Atualiza o cache em memória somente após a confirmação no servidor.
         reservas.push(novaReserva);
         todasAsReservas.push(novaReserva);
-        localStorage.setItem('reservas_salvas', JSON.stringify(reservas));
 
         // Limpa formulário
         if (inputMotivo) inputMotivo.value = "";
@@ -1487,28 +1496,31 @@ async function atualizarTabela() {
 
     tbody.innerHTML = "<tr><td class='reservation-list-empty' colspan='4'>Carregando reservas...</td></tr>";
 
-    let listaDocs = [];
-    let consultouFirestore = false;
-
     try {
-        listaDocs = await chamarFuncaoFirebase('publicReservations', {}, false);
-        consultouFirestore = true;
-    } catch (e) {
-        console.warn("Erro ao buscar reservas públicas, utilizando cache local:", e);
-    }
-
-    // Se a nuvem não retornou itens ou está sem conexão, usa o cache local
-    if (!consultouFirestore) {
-        listaDocs = [...reservas];
-    } else {
+        const listaDocs = await chamarFuncaoFirebase('publicReservations', {}, false);
+        if (!Array.isArray(listaDocs)) {
+            throw new Error('A resposta do Firestore não contém uma lista de reservas válida.');
+        }
         todasAsReservas = listaDocs;
         reservas = [...listaDocs];
-        localStorage.setItem('reservas_salvas', JSON.stringify(listaDocs));
+        atualizarResumoLista(listaDocs);
+        atualizarFiltroAmbientesLista(listaDocs);
+        renderizarListaReservas(listaDocs);
+    } catch (error) {
+        console.error('Erro ao buscar reservas reais no Firestore:', error);
+        todasAsReservas = [];
+        reservas = [];
+        atualizarResumoLista([]);
+        atualizarFiltroAmbientesLista([]);
+        tbody.replaceChildren();
+        const row = tbody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 4;
+        cell.className = 'reservation-list-empty';
+        cell.textContent = 'Não foi possível carregar as reservas do Firestore. Tente novamente mais tarde.';
+        const resultCount = document.getElementById('lista-resultado-count');
+        if (resultCount) resultCount.textContent = 'Reservas indisponíveis no momento.';
     }
-
-    atualizarResumoLista(listaDocs);
-    atualizarFiltroAmbientesLista(listaDocs);
-    renderizarListaReservas(listaDocs);
 }
 
 function configurarFiltrosLista() {
