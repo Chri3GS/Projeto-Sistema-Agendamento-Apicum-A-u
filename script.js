@@ -1899,10 +1899,11 @@ function atualizarInterfaceUsuario() {
     
     if (usuarioLogado) {
         const primeiroNome = usuarioLogado.nome.split(' ')[0];
+        const tipoExibido = usuarioLogado.tipo === 'Aluno' ? 'Usuário' : usuarioLogado.tipo;
         if (window.innerWidth <= 768) {
             textoTopo.innerText = `${primeiroNome} | Sair`;
         } else {
-            textoTopo.innerText = `${primeiroNome} (${usuarioLogado.tipo}) | Sair`;
+            textoTopo.innerText = `${primeiroNome} (${tipoExibido}) | Sair`;
         }
         if (iconeLogin) iconeLogin.hidden = true;
         if (avatar) {

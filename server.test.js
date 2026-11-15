@@ -179,6 +179,8 @@ test('fluxo completo por uma origem: seleção administrativa, login, site auten
     assert.equal(home.status, 200);
     const homeHtml = await home.text();
     assert.match(homeHtml, /Ambientes disponíveis/);
+    assert.match(homeHtml, /<option value="Aluno">Usuário<\/option>/);
+    assert.match(homeHtml, /Usuários entram com Google/);
 
     const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
     const start = script.indexOf('function selecionarTipoUsuario()');
@@ -308,4 +310,43 @@ test('parser de reservas entende o formato de data usado pelo backend', () => {
     assert.equal(interval.dataStr, '2026-11-20');
     assert.equal(interval.horaInicio, '08:00');
     assert.equal(interval.horaFim, '09:00');
+});
+
+test('identificação pós-login exibe Usuário sem alterar o tipo interno do perfil', () => {
+    const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+    const start = script.indexOf('function atualizarInterfaceUsuario()');
+    const end = script.indexOf('function abrirInformacao', start);
+    assert.ok(start >= 0 && end > start, 'encontrou a atualização do usuário no topo');
+
+    const text = {};
+    const icon = {};
+    const avatar = { removeAttribute() {} };
+    const statusButton = {};
+    const browser = {
+        window: { innerWidth: 1024 },
+        document: {
+            getElementById(id) {
+                return {
+                    'texto-usuario-topo': text,
+                    'icone-login-topo': icon,
+                    'avatar-usuario-topo': avatar,
+                    'btn-status-usuario': statusButton
+                }[id] || null;
+            }
+        },
+        usuarioLogado: {
+            nome: 'Ana Silva',
+            tipo: 'Aluno',
+            fotoURL: ''
+        }
+    };
+    const atualizarInterfaceUsuario = vm.runInNewContext(
+        `${script.slice(start, end)}; atualizarInterfaceUsuario;`,
+        browser
+    );
+
+    atualizarInterfaceUsuario();
+
+    assert.equal(text.innerText, 'Ana (Usuário) | Sair');
+    assert.equal(browser.usuarioLogado.tipo, 'Aluno');
 });
