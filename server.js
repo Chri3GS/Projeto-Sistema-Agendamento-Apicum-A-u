@@ -268,8 +268,6 @@ function createAdminServer({
             if (!/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
                 return sendJson(response, 415, { error: 'Esta operação exige conteúdo JSON.' });
             }
-            const previousSession = getSession(request);
-            if (previousSession) sessions.delete(previousSession.id);
             let data;
             try {
                 data = await readJson(request);
@@ -278,6 +276,9 @@ function createAdminServer({
             }
             if (typeof data.idToken !== 'string' || !data.idToken) {
                 return sendJson(response, 401, { error: 'Token do Firebase Authentication ausente.' });
+            }
+            if (typeof data.validateOnly !== 'undefined' && typeof data.validateOnly !== 'boolean') {
+                return sendJson(response, 400, { error: 'Opção de validação de sessão inválida.' });
             }
             if (!firebaseAuth || !adminUid) {
                 return sendJson(response, 503, {
@@ -288,12 +289,26 @@ function createAdminServer({
             try {
                 decodedToken = await firebaseAuth.verifyIdToken(data.idToken, true);
             } catch (error) {
+                const previousSession = getSession(request);
+                if (previousSession) sessions.delete(previousSession.id);
+                const clearCookie = `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${
+                    request.socket.encrypted || process.env.NODE_ENV === 'production' ? '; Secure' : ''
+                }`;
+                if (error.code === 'auth/argument-error' || error.code === 'auth/id-token-expired' ||
+                    error.code === 'auth/invalid-id-token' || error.code === 'auth/id-token-revoked' ||
+                    error.code === 'auth/user-disabled' || error.code === 'auth/user-not-found') {
+                    return sendJson(response, 401, { error: 'Sessão Google inválida ou expirada.' }, {
+                        'Set-Cookie': clearCookie
+                    });
+                }
                 return sendStoreError(response, error);
             }
+            const previousSession = getSession(request);
             if (decodedToken.uid !== adminUid ||
                 decodedToken.email !== 'centrotec.apc@gmail.com' ||
                 decodedToken.email_verified !== true ||
                 decodedToken.firebase?.sign_in_provider !== 'google.com') {
+                if (previousSession) sessions.delete(previousSession.id);
                 const clearCookie = `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${
                     request.socket.encrypted || process.env.NODE_ENV === 'production' ? '; Secure' : ''
                 }`;
@@ -301,6 +316,19 @@ function createAdminServer({
                     error: 'Esta conta Google não tem permissão administrativa.'
                 }, { 'Set-Cookie': clearCookie });
             }
+            if (data.validateOnly) {
+                if (previousSession?.session.uid === decodedToken.uid) {
+                    return sendJson(response, 200, { authenticated: true });
+                }
+                const clearCookie = `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${
+                    request.socket.encrypted || process.env.NODE_ENV === 'production' ? '; Secure' : ''
+                }`;
+                return sendJson(response, 401, { authenticated: false }, { 'Set-Cookie': clearCookie });
+            }
+            if (previousSession?.session.uid === decodedToken.uid) {
+                return sendJson(response, 200, { authenticated: true });
+            }
+            if (previousSession) sessions.delete(previousSession.id);
             const sessionId = crypto.randomBytes(32).toString('hex');
             sessions.set(sessionId, {
                 uid: decodedToken.uid,

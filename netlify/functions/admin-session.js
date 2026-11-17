@@ -27,22 +27,17 @@ function clearSessionCookie() {
     return { 'Set-Cookie': sessionCookie('', 0) };
 }
 
+function isAuthorizedGoogleAccount(decodedToken, adminUid) {
+    return decodedToken.uid === adminUid &&
+        decodedToken.email === 'centrotec.apc@gmail.com' &&
+        decodedToken.email_verified === true &&
+        decodedToken.firebase?.sign_in_provider === 'google.com';
+}
+
 function createHandler(runtimeProvider = getRuntime) {
     return async (event) => {
-        if (event.httpMethod === 'GET') {
-            try {
-                const { db } = runtimeProvider();
-                const session = await getAdminSession(event, db);
-                return session
-                    ? sendJson(200, { authenticated: true })
-                    : sendJson(401, { authenticated: false });
-            } catch (error) {
-                return storeErrorResponse(error);
-            }
-        }
-
         if (event.httpMethod !== 'POST') {
-            return sendJson(405, { error: 'Método não permitido.' }, { Allow: 'GET, POST' });
+            return sendJson(405, { error: 'Método não permitido.' }, { Allow: 'POST' });
         }
         if (!sameOrigin(event)) return sendJson(403, { error: 'Origem da requisição inválida.' });
         if (!hasJsonContentType(event)) {
@@ -51,35 +46,48 @@ function createHandler(runtimeProvider = getRuntime) {
 
         let runtime;
         try {
-            const { idToken } = parseJson(event, 16 * 1024);
+            const { idToken, validateOnly = false } = parseJson(event, 16 * 1024);
             if (typeof idToken !== 'string' || !idToken) {
                 return sendJson(401, { error: 'Token do Firebase Authentication ausente.' }, clearSessionCookie());
             }
+            if (typeof validateOnly !== 'boolean') {
+                return sendJson(400, { error: 'Opção de validação de sessão inválida.' });
+            }
             runtime = runtimeProvider();
-            const previousSession = await getAdminSession(event, runtime.db);
-            if (previousSession) await previousSession.ref.delete();
+            const [previousSession, tokenResult] = await Promise.all([
+                getAdminSession(event, runtime.db),
+                runtime.auth.verifyIdToken(idToken, true).then(
+                    (token) => ({ token }),
+                    (error) => ({ error })
+                )
+            ]);
 
             const adminUid = process.env.ADMIN_UID;
             if (!adminUid) {
                 throw new Error('ADMIN_UID não foi configurado no ambiente Netlify.');
             }
-            let decodedToken;
-            try {
-                decodedToken = await runtime.auth.verifyIdToken(idToken, true);
-            } catch (error) {
+            if (tokenResult.error) {
+                const error = tokenResult.error;
                 if (INVALID_TOKEN_CODES.has(error.code)) {
+                    if (previousSession) await previousSession.ref.delete();
                     return sendJson(401, { error: 'Token do Firebase Authentication inválido ou expirado.' }, clearSessionCookie());
                 }
                 throw error;
             }
-            const isAuthorizedGoogleAccount =
-                decodedToken.uid === adminUid &&
-                decodedToken.email === 'centrotec.apc@gmail.com' &&
-                decodedToken.email_verified === true &&
-                decodedToken.firebase?.sign_in_provider === 'google.com';
-            if (!isAuthorizedGoogleAccount) {
+            const decodedToken = tokenResult.token;
+            if (!isAuthorizedGoogleAccount(decodedToken, adminUid)) {
+                if (previousSession) await previousSession.ref.delete();
                 return sendJson(403, { error: 'Esta conta Google não tem permissão administrativa.' }, clearSessionCookie());
             }
+            if (validateOnly) {
+                return previousSession?.uid === decodedToken.uid
+                    ? sendJson(200, { authenticated: true })
+                    : sendJson(401, { authenticated: false }, clearSessionCookie());
+            }
+            if (previousSession?.uid === decodedToken.uid) {
+                return sendJson(200, { authenticated: true });
+            }
+            if (previousSession) await previousSession.ref.delete();
 
             const sessionId = crypto.randomBytes(32).toString('hex');
             const expiresAt = Date.now() + SESSION_TTL_MS;

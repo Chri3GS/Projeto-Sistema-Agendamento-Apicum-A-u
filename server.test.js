@@ -42,16 +42,29 @@ async function withServer(server, operation) {
     }
 }
 
-async function establishAdminSession(baseUrl, idToken = 'google-admin') {
+async function establishAdminSession(baseUrl, idToken = 'google-admin', cookie) {
     const response = await fetch(`${baseUrl}/api/admin/session`, {
         method: 'POST',
         headers: {
             Origin: baseUrl,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            ...(cookie ? { Cookie: cookie } : {})
         },
         body: JSON.stringify({ idToken })
     });
     return { response, cookie: response.headers.get('set-cookie')?.split(';')[0] };
+}
+
+async function validateAdminSession(baseUrl, idToken, cookie) {
+    return fetch(`${baseUrl}/api/admin/session`, {
+        method: 'POST',
+        headers: {
+            Origin: baseUrl,
+            'Content-Type': 'application/json',
+            ...(cookie ? { Cookie: cookie } : {})
+        },
+        body: JSON.stringify({ idToken, validateOnly: true })
+    });
 }
 
 test('protege URLs administrativas e remove o login por usuário e senha', async () => {
@@ -73,6 +86,7 @@ test('protege URLs administrativas e remove o login por usuário e senha', async
         const html = await home.text();
         assert.equal(home.status, 200);
         assert.match(html, /name="techagenda-backend" content="local"/);
+        assert.match(html, /Carregando painel administrativo\.\.\./);
         assert.doesNotMatch(html, /Tipo de usuário|cad-tipo|Administrador<\/option>/);
         assert.match(html, /Continuar com Google/);
 
@@ -107,6 +121,8 @@ test('somente o ID Token Google do UID autorizado cria sessão e libera o painel
         assert.equal(commonLogin.response.status, 403);
         assert.match(commonLogin.response.headers.get('set-cookie'), /Max-Age=0/);
 
+        assert.equal((await validateAdminSession(baseUrl, 'google-admin')).status, 401);
+        assert.equal((await validateAdminSession(baseUrl, 'google-user')).status, 403);
         const noSession = await fetch(`${baseUrl}/api/admin/dashboard`);
         assert.equal(noSession.status, 401);
 
@@ -114,12 +130,20 @@ test('somente o ID Token Google do UID autorizado cria sessão e libera o painel
         assert.equal(response.status, 200);
         assert.match(response.headers.get('set-cookie'), /HttpOnly/);
         assert.match(response.headers.get('set-cookie'), /SameSite=Strict/);
+        assert.equal((await validateAdminSession(baseUrl, 'google-admin', cookie)).status, 200);
+
+        const revalidation = await establishAdminSession(baseUrl, 'google-admin', cookie);
+        assert.equal(revalidation.response.status, 200);
+        assert.equal(revalidation.response.headers.get('set-cookie'), null);
+        assert.equal(revalidation.cookie, undefined);
 
         const panel = await fetch(`${baseUrl}/admin/painel`, {
             headers: { Cookie: cookie }
         });
         assert.equal(panel.status, 200);
-        assert.match(await panel.text(), /name="techagenda-backend" content="local"/);
+        const panelHtml = await panel.text();
+        assert.match(panelHtml, /name="techagenda-backend" content="local"/);
+        assert.match(panelHtml, /Carregando painel administrativo\.\.\./);
 
         const protectedDashboard = await fetch(`${baseUrl}/api/admin/dashboard`, {
             headers: { Cookie: cookie }
@@ -175,12 +199,17 @@ test('recusa corpos JSON acima do limite antes de executar a operação administ
 test('a tela de login não oferece seleção do tipo de usuário', () => {
     const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
     const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+    const styles = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
 
     assert.match(html, /Continuar com Google/);
+    assert.match(html, /Carregando painel administrativo\.\.\./);
+    assert.match(html, /admin-panel-pending/);
     assert.doesNotMatch(html, /Tipo de usuário|cad-tipo|value="Administrador"/);
     assert.doesNotMatch(script, /selecionarTipoUsuario|claims\.admin/);
     assert.match(script, /iniciarSessaoAdminServidor/);
     assert.match(script, /getIdToken\(\)/);
+    assert.match(script, /history\.replaceState\(null, '', '\/admin\/painel'\)/);
+    assert.match(styles, /html\.admin-panel-pending \.admin-panel-loading/);
 });
 
 test('lista pública não substitui falhas do Firestore por reservas do cache local', async () => {

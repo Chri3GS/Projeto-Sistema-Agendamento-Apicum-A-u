@@ -15,6 +15,19 @@ function request(idToken) {
     };
 }
 
+function validateSession(cookie, token = 'admin-token') {
+    return {
+        httpMethod: 'POST',
+        headers: {
+            origin: 'https://techagenda.netlify.app',
+            host: 'techagenda.netlify.app',
+            'content-type': 'application/json',
+            cookie
+        },
+        body: JSON.stringify({ idToken: token, validateOnly: true })
+    };
+}
+
 function createRuntime() {
     const records = new Map();
     const db = {
@@ -84,13 +97,38 @@ test('cria sessão somente após validar o ID Token e o UID administrativo', asy
     });
 
     const { runtime, records } = createRuntime();
-    const response = await createHandler(() => runtime)(request('admin-token'));
+    const handler = createHandler(() => runtime);
+    const response = await handler(request('admin-token'));
 
     assert.equal(response.statusCode, 200);
     assert.deepEqual(JSON.parse(response.body), { authenticated: true });
     assert.match(response.headers['Set-Cookie'], /HttpOnly; Secure; SameSite=Strict/);
     assert.equal(records.size, 1);
     assert.equal([...records.values()][0].uid, 'uid-admin');
+
+    const existingCookie = response.headers['Set-Cookie'].split(';')[0];
+    const validSession = await handler(validateSession(existingCookie));
+    assert.equal(validSession.statusCode, 200);
+    assert.deepEqual(JSON.parse(validSession.body), { authenticated: true });
+
+    const noSession = await handler(validateSession(''));
+    assert.equal(noSession.statusCode, 401);
+
+    const revalidation = await handler({
+        ...request('admin-token'),
+        headers: {
+            ...request('admin-token').headers,
+            cookie: existingCookie
+        }
+    });
+    assert.equal(revalidation.statusCode, 200);
+    assert.equal(revalidation.headers['Set-Cookie'], undefined);
+    assert.equal(records.size, 1);
+
+    const commonAccount = await handler(validateSession(existingCookie, 'user-token'));
+    assert.equal(commonAccount.statusCode, 403);
+    assert.match(commonAccount.headers['Set-Cookie'], /Max-Age=0/);
+    assert.equal(records.size, 0);
 });
 
 test('rejeita contas comuns e requisições sem token sem criar sessão', async (context) => {

@@ -6,9 +6,21 @@
     <base href="/">
     <meta name="techagenda-backend" content="netlify">
     <title>Agenda CT APC</title>
+    <script>
+        if (window.location.pathname.replace(/\/+$/, '') === '/admin/painel') {
+            document.documentElement.classList.add('admin-panel-pending');
+        }
+    </script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+    <div id="admin-panel-loading" class="admin-panel-loading" role="status" aria-live="polite">
+        <div class="admin-panel-loading-content">
+            <span class="admin-panel-loading-spinner" aria-hidden="true"></span>
+            <span>Carregando painel administrativo...</span>
+        </div>
+    </div>
 
     <nav class="sidebar" id="sidebar">
     <div class="menu-toggle" onclick="toggleMenu()">
