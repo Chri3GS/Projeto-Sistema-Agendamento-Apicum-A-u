@@ -5,6 +5,7 @@
 // Armazenamento local e em memória
 let reservas = [];
 let todasAsReservas = [...reservas]; // Cache em memória das reservas confirmadas no servidor
+let reservasOcupadas = [];
 let usuarioLogado = null;
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
@@ -85,6 +86,7 @@ window.addEventListener('DOMContentLoaded', () => {
     renderizarAmbientes();
     atualizarOpcoesAmbiente();
     if (!adminPanelAtLoad) carregarAmbientesPublicos();
+    carregarReservasDisponibilidade();
     if (!window.firebaseAuthApi || !window.firebaseAuth) {
         console.error("Firebase Authentication não foi inicializado.");
         mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
@@ -240,7 +242,6 @@ window.addEventListener('DOMContentLoaded', () => {
         garantirDataInicialReserva();
         trocarFotoReserva();
         carregarGradeHorarios();
-        atualizarTabela();
     }
 });
 
@@ -261,6 +262,10 @@ function temAcessoAdministrativo() {
 function atualizarVisibilidadeMenuAdmin(visible) {
     const menuAdmin = document.getElementById('menu-admin');
     if (menuAdmin) menuAdmin.hidden = !visible;
+    const menuLista = document.getElementById('menu-lista');
+    if (menuLista) menuLista.hidden = !visible;
+    const listButton = document.getElementById('btn-confirmacao-lista');
+    if (listButton) listButton.hidden = !visible;
 }
 
 function mostrarPainelAdminBloqueado(mensagem) {
@@ -340,12 +345,41 @@ async function encerrarSessaoAdminServidor(keepalive = false) {
 function sincronizarEstadoAutenticacao(firebaseUser) {
     if (!firebaseUser) {
         usuarioLogado = null;
+        reservas = [];
+        todasAsReservas = [];
         window.techAgendaFirebaseAdmin = false;
         window.techAgendaNetlifyAdminSession = false;
         window.techAgendaAdminSession = false;
         atualizarVisibilidadeMenuAdmin(false);
     }
     atualizarInterfaceUsuario();
+}
+
+async function carregarReservasDisponibilidade() {
+    const endpoint = window.techAgendaBackend === 'local'
+        ? '/api/reservation-availability'
+        : '/.netlify/functions/reservation-availability';
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(result.error || `Falha ao carregar disponibilidade (${response.status}).`);
+        }
+        if (!Array.isArray(result)) {
+            throw new Error('A resposta do servidor não contém horários ocupados válidos.');
+        }
+        reservasOcupadas = result;
+        carregarGradeHorarios();
+    } catch (error) {
+        console.error('Erro ao carregar horários ocupados:', error);
+        reservasOcupadas = [];
+    }
 }
 
 async function apiNetlifyAdmin(action, data = {}) {
@@ -525,6 +559,16 @@ async function carregarPainelAdmin() {
                 : await chamarFuncaoFirebase('adminDashboard');
         ambientesCadastrados = dashboard.ambientes.map(normalizarAmbiente);
         todasAsReservas = dashboard.reservas;
+        reservasOcupadas = dashboard.reservas.map((reservation) => ({
+            ambienteId: reservation.ambienteId,
+            ambiente: reservation.ambiente,
+            status: reservation.status,
+            dataReserva: reservation.dataReserva,
+            horaInicio: reservation.horaInicio,
+            horaFim: reservation.horaFim,
+            dataInicio: reservation.dataInicio,
+            dataFim: reservation.dataFim
+        }));
         document.getElementById('admin-total-ambientes').textContent = dashboard.resumo.ambientes;
         document.getElementById('admin-total-reservas').textContent = dashboard.resumo.reservas;
         document.getElementById('admin-reservas-ativas').textContent = dashboard.resumo.ativas;
@@ -889,6 +933,11 @@ async function excluirReservaAdmin(id) {
 // ==========================================
 
 function showSection(sectionId, element) {
+    if (sectionId === 'lista' && !temAcessoAdministrativo()) {
+        atualizarVisibilidadeMenuAdmin(false);
+        showSection('home', document.querySelector('.nav-links li'));
+        return;
+    }
     if (sectionId === 'administracao' && !temAcessoAdministrativo()) {
         mostrarPainelAdminBloqueado(window.firebaseAuth?.currentUser
             ? "Esta conta Google não está autorizada como administradora."
@@ -1218,7 +1267,7 @@ function verificarConflito(ambiente, dataReserva, horaInicio, horaFim) {
     const novoInicio = new Date(ano, mes - 1, dia, hIni, mIni, 0);
     const novoFim = new Date(ano, mes - 1, dia, hFim, mFim, 0);
 
-    for (const item of todasAsReservas) {
+    for (const item of reservasOcupadas) {
         if (item.status === 'cancelada') continue;
         const configuracaoAmbiente = ambientesCadastrados.find((room) => room.nome === ambiente);
         const nomesAssociados = configuracaoAmbiente
@@ -1235,7 +1284,6 @@ function verificarConflito(ambiente, dataReserva, horaInicio, horaFim) {
         // Condição de sobreposição: (novoInicio < existenteFim) && (novoFim > existenteInicio)
         if (novoInicio < info.fim && novoFim > info.inicio) {
             return {
-                usuario: info.usuario,
                 horaInicio: info.horaInicio,
                 horaFim: info.horaFim,
                 ambiente: info.ambiente
@@ -1347,7 +1395,7 @@ function carregarGradeHorarios() {
                 if (conflito) {
                     status = 'ocupado';
                     labelTag = 'Reservado';
-                    detalheTexto = `Por: ${escaparHTML(conflito.usuario)}`;
+                    detalheTexto = 'Horário ocupado';
                     disabled = 'disabled';
                     onClickAttr = '';
                 } else if (horaInicioSel && horaFimSel && horaFimSel > horaInicioSel) {
@@ -1540,6 +1588,14 @@ async function salvarReserva() {
         // Atualiza o cache em memória somente após a confirmação no servidor.
         reservas.push(novaReserva);
         todasAsReservas.push(novaReserva);
+        reservasOcupadas.push({
+            ambienteId: novaReserva.ambienteId,
+            ambiente: novaReserva.ambiente,
+            status: 'ativa',
+            dataReserva: novaReserva.dataReserva,
+            horaInicio: novaReserva.horaInicio,
+            horaFim: novaReserva.horaFim
+        });
 
         // Limpa formulário
         if (inputMotivo) inputMotivo.value = "";
@@ -1596,33 +1652,46 @@ function formataData(dataString) {
 // ==========================================
 
 async function atualizarTabela() {
+    if (!temAcessoAdministrativo()) {
+        atualizarVisibilidadeMenuAdmin(false);
+        showSection('home', document.querySelector('.nav-links li'));
+        return;
+    }
     const tbody = document.querySelector('#tabela-reservas tbody');
     if (!tbody) return;
 
     tbody.innerHTML = "<tr><td class='reservation-list-empty' colspan='4'>Carregando reservas...</td></tr>";
 
     try {
-        const response = await fetch('/.netlify/functions/public-reservations', {
-            method: 'POST',
-            credentials: 'same-origin',
-            cache: 'no-store',
-            headers: { 'Content-Type': 'application/json' },
-            body: '{}'
-        });
-        const listaDocs = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(listaDocs.error || `Falha ao carregar reservas (${response.status}).`);
+        let listaDocs;
+        if (window.techAgendaNetlifyAdminSession) {
+            listaDocs = await apiNetlifyAdmin('listReservations');
+        } else if (window.techAgendaAdminSession) {
+            const response = await apiJson('/api/admin/reservas', { method: 'GET' });
+            listaDocs = await response.json();
+        } else {
+            listaDocs = await chamarFuncaoFirebase('adminReservations');
         }
         if (!Array.isArray(listaDocs)) {
             throw new Error('A resposta do servidor não contém uma lista de reservas válida.');
         }
         todasAsReservas = listaDocs;
         reservas = [...listaDocs];
+        reservasOcupadas = listaDocs.map((reservation) => ({
+            ambienteId: reservation.ambienteId,
+            ambiente: reservation.ambiente,
+            status: reservation.status,
+            dataReserva: reservation.dataReserva,
+            horaInicio: reservation.horaInicio,
+            horaFim: reservation.horaFim,
+            dataInicio: reservation.dataInicio,
+            dataFim: reservation.dataFim
+        }));
         atualizarResumoLista(listaDocs);
         atualizarFiltroAmbientesLista(listaDocs);
         renderizarListaReservas(listaDocs);
     } catch (error) {
-        console.error('Erro ao buscar reservas reais no Firestore:', error);
+        console.error('Erro ao buscar reservas administrativas no Firestore:', error);
         todasAsReservas = [];
         reservas = [];
         atualizarResumoLista([]);

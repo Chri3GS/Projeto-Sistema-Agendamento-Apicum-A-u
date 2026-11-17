@@ -30,6 +30,8 @@ function createHandler(
             switch (request.action) {
                 case 'dashboard':
                     return sendJson(200, await store.getDashboard());
+                case 'listReservations':
+                    return sendJson(200, await store.listReservations());
                 case 'saveEnvironment':
                     return sendJson(200, await store.saveEnvironment(
                         request.data,

@@ -1,3 +1,5 @@
+const { toReservationAvailability } = require('./reservation-availability');
+
 const INITIAL_ENVIRONMENTS = [
     {
         id: 'biblioteca',
@@ -263,20 +265,43 @@ function createAdminStore({ db, auth, FieldValue }) {
         ));
     }
 
-    async function getDashboard() {
-        const [environmentItems, reservationSnapshot] = await Promise.all([
-            listEnvironments(true),
-            reservations.get()
-        ]);
+    async function listReservations() {
+        const reservationSnapshot = await reservations.get();
         const reservationItems = reservationSnapshot.docs.map((doc) => ({
             id: doc.id,
             ...serialize(doc.data())
         }));
         const now = Date.now();
-        const reservationsWithStatus = reservationItems.map((item) => ({
+        return reservationItems.map((item) => ({
             ...item,
             situacao: reservationStatus(item, now)
         }));
+    }
+
+    async function listReservationAvailability() {
+        const reservationSnapshot = await reservations.select(
+            'ambienteId',
+            'ambiente',
+            'status',
+            'situacao',
+            'canceladoEm',
+            'dataReserva',
+            'horaInicio',
+            'horaFim',
+            'dataInicio',
+            'dataFim',
+            'data'
+        ).get();
+        return reservationSnapshot.docs.map((doc) =>
+            toReservationAvailability(serialize(doc.data()))
+        );
+    }
+
+    async function getDashboard() {
+        const [environmentItems, reservationsWithStatus] = await Promise.all([
+            listEnvironments(true),
+            listReservations()
+        ]);
         return {
             ambientes: environmentItems,
             reservas: reservationsWithStatus,
@@ -495,6 +520,8 @@ function createAdminStore({ db, auth, FieldValue }) {
         deleteEnvironment,
         deleteReservation,
         getDashboard,
+        listReservationAvailability,
+        listReservations,
         listPublicEnvironments,
         listEnvironments,
         saveEnvironment

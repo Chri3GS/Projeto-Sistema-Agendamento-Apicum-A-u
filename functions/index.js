@@ -4,7 +4,6 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { HttpsError, onCall } = require('firebase-functions/v2/https');
 const { requireAdmin } = require('./authz');
 const { createAdminStore, StoreError } = require('./admin-store');
-const { toPublicReservation } = require('./public-reservations');
 
 const app = getApps().length ? getApp() : initializeApp();
 const store = createAdminStore({
@@ -40,13 +39,6 @@ exports.createReservation = onCall(async (request) => {
     }
 });
 
-exports.publicReservations = onCall(async () => {
-    const snapshot = await getFirestore(app).collection('reservas').get();
-    return snapshot.docs.map((reservation) =>
-        toPublicReservation(reservation.id, reservation.data())
-    );
-});
-
 exports.adminDashboard = onCall(async (request) => {
     requireAdmin(request);
     try {
@@ -55,6 +47,18 @@ exports.adminDashboard = onCall(async (request) => {
         throw callableError(error);
     }
 });
+
+async function getAdminReservations(request) {
+    requireAdmin(request);
+    try {
+        return await store.listReservations();
+    } catch (error) {
+        throw callableError(error);
+    }
+}
+
+exports.adminReservations = onCall(getAdminReservations);
+exports.publicReservations = onCall(getAdminReservations);
 
 exports.saveEnvironment = onCall(async (request) => {
     requireAdmin(request);

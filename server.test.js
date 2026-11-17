@@ -114,17 +114,24 @@ test('somente o ID Token Google do UID autorizado cria sessão e libera o painel
     const server = createAdminServer({
         adminUid: 'uid-admin',
         firebaseAuth: createAuth(),
-        firebaseStore: { async getDashboard() { return dashboard; } }
+        firebaseStore: {
+            async getDashboard() { return dashboard; },
+            async listReservations() { return [{ id: 'reservation-1', usuario: 'Ana' }]; }
+        }
     });
     await withServer(server, async (baseUrl) => {
         const commonLogin = await establishAdminSession(baseUrl, 'google-user');
         assert.equal(commonLogin.response.status, 403);
         assert.match(commonLogin.response.headers.get('set-cookie'), /Max-Age=0/);
+        assert.equal((await fetch(`${baseUrl}/api/admin/reservas`, {
+            headers: { Cookie: commonLogin.cookie || '' }
+        })).status, 401);
 
         assert.equal((await validateAdminSession(baseUrl, 'google-admin')).status, 401);
         assert.equal((await validateAdminSession(baseUrl, 'google-user')).status, 403);
         const noSession = await fetch(`${baseUrl}/api/admin/dashboard`);
         assert.equal(noSession.status, 401);
+        assert.equal((await fetch(`${baseUrl}/api/admin/reservas`)).status, 401);
 
         const { response, cookie } = await establishAdminSession(baseUrl);
         assert.equal(response.status, 200);
@@ -150,6 +157,13 @@ test('somente o ID Token Google do UID autorizado cria sessão e libera o painel
         });
         assert.equal(protectedDashboard.status, 200);
         assert.deepEqual(await protectedDashboard.json(), dashboard);
+        const protectedReservations = await fetch(`${baseUrl}/api/admin/reservas`, {
+            headers: { Cookie: cookie }
+        });
+        assert.equal(protectedReservations.status, 200);
+        assert.deepEqual(await protectedReservations.json(), [
+            { id: 'reservation-1', usuario: 'Ana' }
+        ]);
 
         const logout = await fetch(`${baseUrl}/api/admin/logout`, {
             method: 'POST',
@@ -203,6 +217,8 @@ test('a tela de login não oferece seleção do tipo de usuário', () => {
     const styles = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
 
     assert.match(html, /Continuar com Google/);
+    assert.match(html, /id="menu-lista" hidden/);
+    assert.match(html, /id="btn-confirmacao-lista"[^>]*hidden/);
     assert.match(html, /Carregando painel administrativo\.\.\./);
     assert.match(html, /admin-panel-pending/);
     assert.doesNotMatch(html, /Tipo de usuário|cad-tipo|value="Administrador"/);
@@ -211,53 +227,34 @@ test('a tela de login não oferece seleção do tipo de usuário', () => {
     assert.match(script, /getIdToken\(\)/);
     assert.match(script, /history\.replaceState\(null, '', '\/admin\/painel'\)/);
     assert.match(styles, /html\.admin-panel-pending \.admin-panel-loading/);
+    assert.match(script, /sectionId === 'lista' && !temAcessoAdministrativo\(\)/);
 });
 
-test('lista pública não substitui falhas do Firestore por reservas do cache local', async () => {
+test('a lista de reservas exige acesso administrativo', async () => {
     const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
     const start = script.indexOf('async function atualizarTabela()');
     const end = script.indexOf('function configurarFiltrosLista()', start);
-    assert.ok(start >= 0 && end > start, 'encontrou a atualização da lista pública');
-
-    let message = '';
-    const cell = {};
-    Object.defineProperty(cell, 'textContent', {
-        set(value) {
-            message = value;
-        }
-    });
-    const tbody = {
-        replaceChildren() {},
-        insertRow() {
-            return { insertCell: () => cell };
-        }
-    };
-    const browser = {
-        document: {
-            querySelector: () => tbody,
-            getElementById: () => null
-        },
-        fetch: async (url, options) => {
-            assert.equal(url, '/.netlify/functions/public-reservations');
-            assert.equal(options.method, 'POST');
-            throw new Error('Netlify Function indisponível');
-        },
-        atualizarResumoLista: (reservations) => assert.deepEqual(Array.from(reservations), []),
-        atualizarFiltroAmbientesLista: (reservations) => assert.deepEqual(Array.from(reservations), []),
-        console: { error() {} },
-        reservas: [{ id: 'cache-antigo' }],
-        todasAsReservas: [{ id: 'cache-antigo' }]
-    };
+    assert.ok(start >= 0 && end > start, 'encontrou a atualização administrativa da lista');
+    assert.match(script.slice(start, end), /if \(!temAcessoAdministrativo\(\)\)/);
+    assert.match(script.slice(start, end), /apiNetlifyAdmin\('listReservations'\)/);
+    assert.match(script.slice(start, end), /\/api\/admin\/reservas/);
+    assert.doesNotMatch(script, /public-reservations/);
     const atualizarTabela = vm.runInNewContext(
         `${script.slice(start, end)}; atualizarTabela;`,
-        browser
+        {
+            temAcessoAdministrativo: () => false,
+            atualizarVisibilidadeMenuAdmin() {},
+            showSection() {},
+            document: {
+                querySelector(selector) {
+                    if (selector === '.nav-links li') return null;
+                    throw new Error('A consulta protegida não deve ser acessada.');
+                }
+            }
+        }
     );
 
     await atualizarTabela();
-
-    assert.deepEqual(Array.from(browser.reservas), []);
-    assert.deepEqual(Array.from(browser.todasAsReservas), []);
-    assert.match(message, /Netlify Function indisponível/);
 });
 
 test('parser de reservas entende o formato de data usado pelo backend', () => {

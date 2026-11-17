@@ -38,7 +38,7 @@
     <li onclick="showSection('reserva', this)">
         <img src="imagens/icone reserva.png" class="nav-icon"> Reserva
     </li>
-    <li onclick="showSection('lista', this)">
+    <li id="menu-lista" hidden onclick="showSection('lista', this)">
         <img src="imagens/icone lista.png" class="nav-icon"> Lista
     </li>
     <li onclick="showSection('falarComCt', this)">
@@ -412,7 +412,7 @@
         </div>
         <div class="modal-footer modal-footer-botoes">
             <button class="btn-info" onclick="fecharModalConfirmacao()">Novo Agendamento</button>
-            <button class="btn-primary" onclick="irParaListaReservas()">Ver na Lista</button>
+            <button class="btn-primary" id="btn-confirmacao-lista" onclick="irParaListaReservas()" hidden>Ver na Lista</button>
         </div>
     </div>
 </div>

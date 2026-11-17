@@ -1,14 +1,14 @@
-const { StoreError } = require('../../functions/admin-store');
-const { toPublicReservation } = require('../../functions/public-reservations');
 const {
+    getAdminSession,
     getRuntime,
     hasJsonContentType,
     parseJson,
     sameOrigin,
-    sendJson
+    sendJson,
+    storeErrorResponse
 } = require('../shared/runtime');
 
-function createHandler(runtimeProvider = getRuntime) {
+function createHandler(runtimeProvider = getRuntime, adminSessionProvider = getAdminSession) {
     return async (event) => {
         if (event.httpMethod !== 'POST') {
             return sendJson(405, { error: 'Método não permitido.' }, { Allow: 'POST' });
@@ -19,21 +19,13 @@ function createHandler(runtimeProvider = getRuntime) {
         }
 
         try {
+            const { db, store } = runtimeProvider();
+            const session = await adminSessionProvider(event, db);
+            if (!session) return sendJson(401, { error: 'Sessão administrativa inválida ou expirada.' });
             parseJson(event);
-            const { db } = runtimeProvider();
-            const snapshot = await db.collection('reservas').get();
-            const reservations = snapshot.docs.map((document) =>
-                toPublicReservation(document.id, document.data())
-            );
-            return sendJson(200, reservations);
+            return sendJson(200, await store.listReservations());
         } catch (error) {
-            if (error instanceof StoreError) {
-                return sendJson(error.statusCode, { error: error.message });
-            }
-            console.error('Falha ao carregar reservas públicas via Netlify:', error);
-            return sendJson(503, {
-                error: 'A lista de reservas está temporariamente indisponível. Tente novamente mais tarde.'
-            });
+            return storeErrorResponse(error);
         }
     };
 }

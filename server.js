@@ -244,6 +244,24 @@ function createAdminServer({
             }
         }
 
+        if (pathname === '/api/reservation-availability' && request.method === 'POST') {
+            if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Origem da requisição inválida.' });
+            if (!/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
+                return sendJson(response, 415, { error: 'Esta operação exige conteúdo JSON.' });
+            }
+            if (!firebaseStore) {
+                return sendJson(response, 503, {
+                    error: 'A disponibilidade exige credenciais Firebase Admin configuradas no servidor.'
+                });
+            }
+            try {
+                await readJson(request);
+                return sendJson(response, 200, await firebaseStore.listReservationAvailability());
+            } catch (error) {
+                return sendStoreError(response, error);
+            }
+        }
+
         if (pathname === '/api/reservas' && request.method === 'POST') {
             if (!firebaseStore) {
                 return sendJson(response, 503, {
@@ -373,6 +391,9 @@ function createAdminServer({
             try {
                 if (pathname === '/api/admin/dashboard' && request.method === 'GET') {
                     return sendJson(response, 200, await firebaseStore.getDashboard());
+                }
+                if (pathname === '/api/admin/reservas' && request.method === 'GET') {
+                    return sendJson(response, 200, await firebaseStore.listReservations());
                 }
                 if (pathname === '/api/admin/ambientes' && request.method === 'POST') {
                     const created = await firebaseStore.saveEnvironment(await readJson(request), null, actor);
