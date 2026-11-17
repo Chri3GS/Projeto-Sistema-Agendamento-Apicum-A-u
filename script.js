@@ -1099,6 +1099,10 @@ function aoMudarData() {
 }
 
 // Chamado ao alterar manualmente hora de início ou término
+function reservaCruzaIntervaloAlmoco(horaInicio, horaFim) {
+    return horaInicio < '13:00' && horaFim > '12:00';
+}
+
 function aoMudarHorarioManual() {
     const inputInicio = document.getElementById('hora-inicio');
     const inputFim = document.getElementById('hora-fim');
@@ -1126,6 +1130,12 @@ function aoMudarHorarioManual() {
     // 1. Validação de horário de término anterior ou igual ao início
     if (horaFim <= horaInicio) {
         mostrarAlertaReserva("erro", "⚠️ O horário de término deve ser posterior ao horário de início.");
+        atualizarDestaqueSlots(horaInicio, horaFim);
+        return;
+    }
+
+    if (reservaCruzaIntervaloAlmoco(horaInicio, horaFim)) {
+        mostrarAlertaReserva("erro", "O horário de almoço (12h às 13h) não pode ser reservado.");
         atualizarDestaqueSlots(horaInicio, horaFim);
         return;
     }
@@ -1334,12 +1344,12 @@ function carregarGradeHorarios() {
     const minutoFinal = horaEmMinutos(ambienteConfig.fechamento);
     const grupos = [
         { nome: '🌅 Turno da Manhã', slots: [] },
-        { nome: '🍽️ Intervalo / Transição', slots: [] },
         { nome: '🌇 Turno da Tarde', slots: [] }
     ];
     for (let inicio = minutoInicial; inicio + 60 <= minutoFinal; inicio += 60) {
         const slot = { inicio: minutosEmHora(inicio), fim: minutosEmHora(inicio + 60) };
-        const grupo = inicio < 12 * 60 ? grupos[0] : (inicio < 13 * 60 ? grupos[1] : grupos[2]);
+        if (inicio < 13 * 60 && inicio + 60 > 12 * 60) continue;
+        const grupo = inicio < 12 * 60 ? grupos[0] : grupos[1];
         grupo.slots.push(slot);
     }
     const turnos = grupos.filter((grupo) => grupo.slots.length).map((grupo) => ({
@@ -1509,6 +1519,11 @@ async function salvarReserva() {
     // 4. Validação de término posterior ao início
     if (horaFim <= horaInicio) {
         mostrarAlertaReserva("erro", "⚠️ O horário de término deve ser posterior ao horário de início!");
+        return;
+    }
+
+    if (reservaCruzaIntervaloAlmoco(horaInicio, horaFim)) {
+        mostrarAlertaReserva("erro", "O horário de almoço (12h às 13h) não pode ser reservado.");
         return;
     }
 

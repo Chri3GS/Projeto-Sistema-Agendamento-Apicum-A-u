@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const {
     INITIAL_ENVIRONMENTS,
+    intersectsLunchBreak,
     reservationStatus,
     StoreError,
     createAdminStore,
@@ -115,6 +116,37 @@ test('calcula situação de reserva e reconhece cancelamentos', () => {
         horaInicio: '10:00',
         horaFim: '11:00'
     }, now), 'ativa');
+});
+
+test('impede reservas durante ou atravessando o horário de almoço no backend', async () => {
+    const store = createAdminStore({
+        db: { collection: () => ({}) },
+        auth: { verifyIdToken: async () => ({ uid: 'user-1' }) },
+        FieldValue: {}
+    });
+    const invalidIntervals = [
+        ['12:00', '13:00'],
+        ['12:00', '12:30'],
+        ['11:00', '13:00'],
+        ['11:30', '12:30'],
+        ['12:30', '13:30']
+    ];
+
+    for (const [horaInicio, horaFim] of invalidIntervals) {
+        await assert.rejects(store.createReservation({
+            ambienteId: 'biblioteca',
+            dataReserva: '2026-11-20',
+            horaInicio,
+            horaFim
+        }, 'firebase-token'), (error) =>
+            error instanceof StoreError &&
+            error.statusCode === 400 &&
+            /horário de almoço/.test(error.message)
+        );
+    }
+
+    assert.equal(intersectsLunchBreak('11:00', '12:00'), false);
+    assert.equal(intersectsLunchBreak('13:00', '14:00'), false);
 });
 
 test('dashboard administrativo inclui reservas de todos os usuários', async () => {

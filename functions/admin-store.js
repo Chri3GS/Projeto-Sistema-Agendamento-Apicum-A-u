@@ -130,6 +130,10 @@ function validTime(value) {
     return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
+function intersectsLunchBreak(start, end) {
+    return timeToMinutes(start) < 13 * 60 && timeToMinutes(end) > 12 * 60;
+}
+
 function intervalForReservation(reservation) {
     let start = reservation.dataInicio;
     let end = reservation.dataFim;
@@ -433,6 +437,9 @@ function createAdminStore({ db, auth, FieldValue }) {
             !validTime(horaInicio) || !validTime(horaFim) || horaInicio >= horaFim) {
             throw new StoreError(400, 'Data e horário da reserva inválidos.');
         }
+        if (intersectsLunchBreak(horaInicio, horaFim)) {
+            throw new StoreError(400, 'O horário de almoço (12:00 às 13:00) não pode ser reservado.');
+        }
         const motivo = typeof input.motivo === 'string' ? input.motivo.trim().slice(0, 1000) : '';
         const environmentRef = environments.doc(ambienteId);
         const environmentSnapshot = await environmentRef.get();
@@ -541,6 +548,7 @@ function formatDate(value) {
 module.exports = {
     createAdminStore,
     INITIAL_ENVIRONMENTS,
+    intersectsLunchBreak,
     reservationStatus,
     StoreError,
     validateEnvironment

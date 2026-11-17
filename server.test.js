@@ -275,6 +275,56 @@ test('parser de reservas entende o formato de data usado pelo backend', () => {
     assert.equal(interval.horaFim, '09:00');
 });
 
+test('a grade mostra somente manhã e tarde e não oferece o horário de almoço', () => {
+    const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+    const start = script.indexOf('function carregarGradeHorarios()');
+    const end = script.indexOf('// Ao clicar em um slot livre', start);
+    assert.ok(start >= 0 && end > start, 'encontrou a renderização da grade');
+
+    const elements = {
+        'container-grade-turnos': { scrollTop: 0, innerHTML: '' },
+        'data-reserva': { value: '2026-11-20' },
+        'select-ambiente': { value: 'Biblioteca' },
+        'texto-data-selecionada': {},
+        'titulo-grade-disponibilidade': {},
+        'hora-inicio': { value: '' },
+        'hora-fim': { value: '' }
+    };
+    const render = vm.runInNewContext(
+        `${script.slice(start, end)}; carregarGradeHorarios;`,
+        {
+            document: { getElementById: (id) => elements[id] || null },
+            ambientesCadastrados: [{
+                nome: 'Biblioteca',
+                ativo: true,
+                diasDisponiveis: [5],
+                abertura: '08:00',
+                fechamento: '18:00'
+            }],
+            Date,
+            getHojeFormatado: () => '2026-11-17',
+            formatarDataBR: (date) => date,
+            horaEmMinutos: (time) => {
+                const [hours, minutes] = time.split(':').map(Number);
+                return hours * 60 + minutes;
+            },
+            minutosEmHora: (minutes) =>
+                `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`,
+            verificarConflito: () => null
+        }
+    );
+
+    render();
+
+    const html = elements['container-grade-turnos'].innerHTML;
+    assert.equal((html.match(/class="bloco-turno"/g) || []).length, 2);
+    assert.match(html, /Turno da Manhã/);
+    assert.match(html, /Turno da Tarde/);
+    assert.doesNotMatch(html, /Intervalo \/ Transição/);
+    assert.doesNotMatch(html, /data-inicio="12:00"[^>]*data-fim="13:00"/);
+    assert.match(script, /if \(reservaCruzaIntervaloAlmoco\(horaInicio, horaFim\)\)/);
+});
+
 test('identificação pós-login exibe Usuário sem alterar o tipo interno do perfil', () => {
     const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
     const start = script.indexOf('function atualizarInterfaceUsuario()');
