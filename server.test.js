@@ -160,6 +160,7 @@ test('somente o ID Token Google do UID autorizado cria sessão e libera o painel
         assert.equal((await fetch(`${baseUrl}/api/admin/dashboard`, {
             headers: { Cookie: cookie }
         })).status, 401);
+        assert.equal((await validateAdminSession(baseUrl, 'google-admin', cookie)).status, 401);
         assert.equal((await fetch(`${baseUrl}/admin/painel`, {
             headers: { Cookie: cookie },
             redirect: 'manual'
@@ -286,7 +287,7 @@ test('identificação pós-login exibe Usuário sem alterar o tipo interno do pe
     const text = {};
     const icon = {};
     const avatar = { removeAttribute() {} };
-    const statusButton = {};
+    const statusButton = { style: {} };
     const browser = {
         window: { innerWidth: 1024 },
         document: {
@@ -299,6 +300,7 @@ test('identificação pós-login exibe Usuário sem alterar o tipo interno do pe
                 }[id] || null;
             }
         },
+        isNetlifyAdminPanelRoute: () => false,
         usuarioLogado: {
             nome: 'Ana Silva',
             tipo: 'Aluno',
@@ -314,4 +316,103 @@ test('identificação pós-login exibe Usuário sem alterar o tipo interno do pe
 
     assert.equal(text.innerText, 'Ana (Usuário) | Sair');
     assert.equal(browser.usuarioLogado.tipo, 'Aluno');
+});
+
+test('sincroniza logout Google, revoga sessão administrativa e restaura botão Entrar', async () => {
+    const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+    const getFunction = (name, nextName) => {
+        const start = script.indexOf(`function ${name}(`);
+        const syncDeclaration = nextName === 'apiNetlifyAdmin'
+            ? `async function ${nextName}(`
+            : `function ${nextName}(`;
+        const end = script.indexOf(syncDeclaration, start);
+        assert.ok(start >= 0 && end > start, `encontrou ${name}`);
+        return script.slice(start, end);
+    };
+    const getAsyncFunction = (name, nextName) => {
+        const start = script.indexOf(`async function ${name}(`);
+        const end = script.indexOf(`function ${nextName}(`, start);
+        assert.ok(start >= 0 && end > start, `encontrou ${name}`);
+        return script.slice(start, end);
+    };
+    const statusButton = { style: { display: 'none' } };
+    const label = {};
+    const icon = {};
+    const avatar = { removeAttribute(name) { this.removedAttribute = name; } };
+    const adminMenu = {};
+    const order = [];
+    const browser = {
+        window: {
+            innerWidth: 1024,
+            techAgendaFirebaseAdmin: false,
+            techAgendaNetlifyAdminSession: true,
+            techAgendaAdminSession: false,
+            techAgendaBackend: 'netlify',
+            location: {
+                pathname: '/admin/painel',
+                replace(destination) {
+                    this.destination = destination;
+                    this.pathname = '/';
+                }
+            },
+            firebaseAuth: { currentUser: { uid: 'uid-admin' } },
+            firebaseAuthApi: {
+                async signOut(auth) {
+                    order.push('google-signout');
+                    auth.currentUser = null;
+                }
+            }
+        },
+        document: {
+            getElementById(id) {
+                return {
+                    'texto-usuario-topo': label,
+                    'icone-login-topo': icon,
+                    'avatar-usuario-topo': avatar,
+                    'btn-status-usuario': statusButton,
+                    'menu-admin': adminMenu
+                }[id] || null;
+            }
+        },
+        usuarioLogado: {
+            uid: 'uid-admin',
+            nome: 'Administradora',
+            tipo: 'Aluno',
+            fotoURL: 'https://example.test/avatar.png'
+        },
+        async encerrarSessaoAdminServidor() {
+            order.push('server-session-revoked');
+        },
+        atualizarVisibilidadeMenuAdmin(visible) {
+            adminMenu.hidden = !visible;
+        },
+        alert(message) {
+            throw new Error(message);
+        },
+        console
+    };
+    const source = [
+        getFunction('isAdminRoute', 'isNetlifyAdminPanelRoute'),
+        getFunction('isNetlifyAdminPanelRoute', 'temAcessoAdministrativo'),
+        getAsyncFunction('sairDaConta', 'atualizarInterfaceUsuario'),
+        getFunction('sincronizarEstadoAutenticacao', 'apiNetlifyAdmin'),
+        getFunction('atualizarInterfaceUsuario', 'abrirInformacao'),
+        'sairDaConta;'
+    ].join('\n');
+    const logout = vm.runInNewContext(source, browser);
+
+    await logout();
+
+    assert.deepEqual(order, ['server-session-revoked', 'google-signout']);
+    assert.equal(browser.usuarioLogado, null);
+    assert.equal(browser.window.techAgendaNetlifyAdminSession, false);
+    assert.equal(browser.window.techAgendaAdminSession, false);
+    assert.equal(browser.window.techAgendaFirebaseAdmin, false);
+    assert.equal(adminMenu.hidden, true);
+    assert.equal(label.innerText, 'Entrar');
+    assert.equal(statusButton.hidden, false);
+    assert.equal(statusButton.style.display, '');
+    assert.equal(icon.hidden, false);
+    assert.equal(avatar.hidden, true);
+    assert.equal(browser.window.location.destination, '/?login=google');
 });

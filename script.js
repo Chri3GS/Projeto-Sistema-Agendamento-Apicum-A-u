@@ -79,10 +79,6 @@ let ambientesCadastrados = Object.entries(dadosSalas).map(([nome, sala]) => ({
 
 window.addEventListener('DOMContentLoaded', () => {
     const adminPanelAtLoad = isNetlifyAdminPanelRoute();
-    if (adminPanelAtLoad) {
-        const statusButton = document.getElementById('btn-status-usuario');
-        if (statusButton) statusButton.style.display = 'none';
-    }
     atualizarInterfaceUsuario();
     configurarFiltrosLista();
     configurarUploadImagemAmbiente();
@@ -106,10 +102,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 const hadAdminSession = window.techAgendaNetlifyAdminSession ||
                     window.techAgendaAdminSession;
                 const adminPanelRoute = isNetlifyAdminPanelRoute();
-                usuarioLogado = null;
-                window.techAgendaFirebaseAdmin = false;
-                window.techAgendaNetlifyAdminSession = false;
-                window.techAgendaAdminSession = false;
+                sincronizarEstadoAutenticacao(firebaseUser);
                 if (hadAdminSession || adminPanelRoute) {
                     encerrarSessaoAdminServidor(true).catch((error) => {
                         console.error('Erro ao encerrar a sessão administrativa:', error);
@@ -342,6 +335,17 @@ async function encerrarSessaoAdminServidor(keepalive = false) {
         body: '{}'
     });
     if (!response.ok) throw new Error('Não foi possível encerrar a sessão administrativa.');
+}
+
+function sincronizarEstadoAutenticacao(firebaseUser) {
+    if (!firebaseUser) {
+        usuarioLogado = null;
+        window.techAgendaFirebaseAdmin = false;
+        window.techAgendaNetlifyAdminSession = false;
+        window.techAgendaAdminSession = false;
+        atualizarVisibilidadeMenuAdmin(false);
+    }
+    atualizarInterfaceUsuario();
 }
 
 async function apiNetlifyAdmin(action, data = {}) {
@@ -1942,12 +1946,11 @@ async function sairDaConta() {
             await encerrarSessaoAdminServidor();
         }
         await window.firebaseAuthApi.signOut(window.firebaseAuth);
-        window.techAgendaFirebaseAdmin = false;
-        window.techAgendaNetlifyAdminSession = false;
-        window.techAgendaAdminSession = false;
-        atualizarVisibilidadeMenuAdmin(false);
         if (isAdminRoute()) {
             window.location.replace('/?login=google');
+        }
+        if (!window.firebaseAuth.currentUser) {
+            sincronizarEstadoAutenticacao(null);
         }
     } catch (error) {
         console.error("Erro ao sair da conta Google:", error);
@@ -1960,6 +1963,12 @@ function atualizarInterfaceUsuario() {
     const iconeLogin = document.getElementById('icone-login-topo');
     const avatar = document.getElementById('avatar-usuario-topo');
     if (!textoTopo) return;
+    const botaoStatus = document.getElementById('btn-status-usuario');
+    if (botaoStatus) {
+        const adminPanelRoute = isNetlifyAdminPanelRoute();
+        botaoStatus.hidden = adminPanelRoute;
+        botaoStatus.style.display = adminPanelRoute ? 'none' : '';
+    }
     
     if (usuarioLogado) {
         const primeiroNome = usuarioLogado.nome.split(' ')[0];
@@ -1975,7 +1984,6 @@ function atualizarInterfaceUsuario() {
             avatar.src = usuarioLogado.fotoURL || "";
             avatar.title = usuarioLogado.nome;
         }
-        const botaoStatus = document.getElementById('btn-status-usuario');
         if (botaoStatus) botaoStatus.title = `Sair da conta de ${usuarioLogado.nome}`;
     } else {
         textoTopo.innerText = "Entrar";
@@ -1984,7 +1992,6 @@ function atualizarInterfaceUsuario() {
             avatar.hidden = true;
             avatar.removeAttribute('src');
         }
-        const botaoStatus = document.getElementById('btn-status-usuario');
         if (botaoStatus) botaoStatus.title = "Continuar com Google";
     }
 }
