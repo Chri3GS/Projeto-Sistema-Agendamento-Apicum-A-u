@@ -20,15 +20,15 @@ test('Netlify Admin SDK usa o projeto Firebase do site e rejeita override diverg
 });
 
 test('requires a valid signature and a matching active Firestore session for every request', async (context) => {
-    const previousUsername = process.env.ADMIN_USERNAME;
     const previousSecret = process.env.ADMIN_SESSION_SECRET;
-    const username = 'techagenda-admin';
+    const previousAdminUid = process.env.ADMIN_UID;
+    const uid = 'authorized-uid';
     const secret = crypto.randomBytes(32).toString('hex');
-    process.env.ADMIN_USERNAME = username;
+    process.env.ADMIN_UID = uid;
     process.env.ADMIN_SESSION_SECRET = secret;
     context.after(() => {
-        if (previousUsername === undefined) delete process.env.ADMIN_USERNAME;
-        else process.env.ADMIN_USERNAME = previousUsername;
+        if (previousAdminUid === undefined) delete process.env.ADMIN_UID;
+        else process.env.ADMIN_UID = previousAdminUid;
         if (previousSecret === undefined) delete process.env.ADMIN_SESSION_SECRET;
         else process.env.ADMIN_SESSION_SECRET = previousSecret;
     });
@@ -38,7 +38,7 @@ test('requires a valid signature and a matching active Firestore session for eve
     const token = createSessionToken(sessionId, expiresAt, secret);
     const sessionDocument = {
         exists: true,
-        data: () => ({ username, expiresAt })
+        data: () => ({ uid, expiresAt })
     };
     const db = {
         collection(name) {
@@ -55,6 +55,7 @@ test('requires a valid signature and a matching active Firestore session for eve
 
     const verified = await getAdminSession(event, db);
     assert.equal(verified.sessionId, sessionId);
+    assert.equal(verified.uid, uid);
     assert.equal(await getAdminSession({
         headers: { cookie: `techagenda_admin=${token[0] === 'a' ? 'b' : 'a'}${token.slice(1)}` }
     }, db), null);

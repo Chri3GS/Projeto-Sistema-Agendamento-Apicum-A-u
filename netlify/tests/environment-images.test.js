@@ -25,7 +25,7 @@ function testDependencies(overrides = {}) {
     const objects = new Map();
     const dependencies = {
         getRuntime: () => ({ db: {} }),
-        getAdminSession: async () => ({ username: 'admin' }),
+        getAdminSession: async () => ({ uid: 'uid-admin' }),
         getBlobStore: () => ({
             async set(key, value, options) {
                 objects.set(key, { value, options });

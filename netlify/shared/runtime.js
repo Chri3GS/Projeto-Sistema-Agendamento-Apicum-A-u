@@ -98,10 +98,10 @@ async function getAdminSession(event, db) {
     const sessionSnapshot = await sessionRef.get();
     if (!sessionSnapshot.exists) return null;
     const session = sessionSnapshot.data();
-    if (session.username !== process.env.ADMIN_USERNAME ||
+    if (!process.env.ADMIN_UID || session.uid !== process.env.ADMIN_UID ||
         session.expiresAt !== token.expiresAt ||
         session.expiresAt <= Date.now()) return null;
-    return { ...token, username: session.username, ref: sessionRef };
+    return { ...token, uid: session.uid, ref: sessionRef };
 }
 
 function storeErrorResponse(error) {

@@ -8,6 +8,10 @@ let todasAsReservas = [...reservas]; // Cache em memória das reservas confirmad
 let usuarioLogado = null;
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
+window.techAgendaAdminSession = false;
+window.techAgendaBackend = document.querySelector(
+    'meta[name="techagenda-backend"]'
+)?.content || 'netlify';
 const perfisEmCarregamento = new Map();
 const MAX_IMAGE_UPLOAD_BYTES = 4 * 1024 * 1024;
 let ambientePreviewObjectUrl = null;
@@ -74,22 +78,11 @@ let ambientesCadastrados = Object.entries(dadosSalas).map(([nome, sala]) => ({
 // ==========================================
 
 window.addEventListener('DOMContentLoaded', () => {
-    window.techAgendaAdminSession = document.querySelector(
-        'meta[name="techagenda-admin-session"]'
-    )?.content === 'true';
     const netlifyAdminPanelRoute = isNetlifyAdminPanelRoute();
     if (netlifyAdminPanelRoute) {
         document.documentElement.style.visibility = 'hidden';
         const statusButton = document.getElementById('btn-status-usuario');
         if (statusButton) statusButton.style.display = 'none';
-    }
-    if (window.techAgendaAdminSession) {
-        usuarioLogado = {
-            uid: 'admin',
-            nome: 'Administrador',
-            tipo: 'Administrador',
-            isAdmin: true
-        };
     }
     atualizarInterfaceUsuario();
     configurarFiltrosLista();
@@ -97,58 +90,90 @@ window.addEventListener('DOMContentLoaded', () => {
     renderizarAmbientes();
     atualizarOpcoesAmbiente();
     carregarAmbientesPublicos();
-    if (window.techAgendaAdminSession) {
-        atualizarVisibilidadeMenuAdmin(true);
-        carregarPainelAdmin();
-    } else if (netlifyAdminPanelRoute) {
-        validarSessaoNetlifyAdmin();
+    if (!window.firebaseAuthApi || !window.firebaseAuth) {
+        console.error("Firebase Authentication não foi inicializado.");
+        mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
+        if (isAdminRoute()) mostrarPainelAdminBloqueado("Entre com sua conta Google para acessar a administração.");
     } else {
-        if (!window.firebaseAuthApi || !window.firebaseAuth) {
-            console.error("Firebase Authentication não foi inicializado.");
-            mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
-            if (isAdminRoute()) mostrarPainelAdminBloqueado("Entre com sua conta Google para acessar a administração.");
-        } else {
-            window.firebaseAuthApi.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
-                if (!firebaseUser) {
-                    usuarioLogado = null;
-                    window.techAgendaFirebaseAdmin = false;
-                    atualizarVisibilidadeMenuAdmin(false);
-                    atualizarInterfaceUsuario();
-                    if (isAdminRoute()) {
-                        mostrarPainelAdminBloqueado("Entre com sua conta Google para acessar a administração.");
-                        abrirModalLogin();
-                    } else if (document.getElementById('administracao')?.style.display !== 'none') {
-                        showSection('home');
+        window.firebaseAuthApi.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
+            if (!firebaseUser) {
+                const hadAdminSession = window.techAgendaNetlifyAdminSession ||
+                    window.techAgendaAdminSession;
+                usuarioLogado = null;
+                window.techAgendaFirebaseAdmin = false;
+                window.techAgendaNetlifyAdminSession = false;
+                window.techAgendaAdminSession = false;
+                if (hadAdminSession || netlifyAdminPanelRoute) {
+                    try {
+                        await encerrarSessaoAdminServidor();
+                    } catch (error) {
+                        console.error('Erro ao encerrar a sessão administrativa:', error);
                     }
-                    return;
                 }
+                atualizarVisibilidadeMenuAdmin(false);
+                atualizarInterfaceUsuario();
+                if (isAdminRoute()) {
+                    document.documentElement.style.visibility = '';
+                    mostrarPainelAdminBloqueado("Entre com sua conta Google para acessar a administração.");
+                    abrirModalLogin();
+                } else if (document.getElementById('administracao')?.style.display !== 'none') {
+                    showSection('home');
+                }
+                return;
+            }
 
+            try {
+                usuarioLogado = await obterOuCriarPerfil(firebaseUser);
+                let isAdmin = false;
                 try {
-                    usuarioLogado = await obterOuCriarPerfil(firebaseUser);
-                    const token = await firebaseUser.getIdTokenResult();
-                    window.techAgendaFirebaseAdmin = token.claims.admin === true;
-                    atualizarVisibilidadeMenuAdmin(window.techAgendaFirebaseAdmin);
-                    atualizarInterfaceUsuario();
-                    fecharModalLogin();
-                    if (isAdminRoute()) {
-                        if (window.techAgendaFirebaseAdmin) {
-                            liberarPainelAdmin();
-                            showSection('administracao');
-                        } else {
-                            mostrarPainelAdminBloqueado("Esta conta Google não está autorizada como administradora.");
-                        }
-                    }
+                    isAdmin = await iniciarSessaoAdminServidor(firebaseUser);
                 } catch (error) {
-                    console.error("Erro ao carregar o perfil autenticado:", error);
-                    usuarioLogado = null;
-                    window.techAgendaFirebaseAdmin = false;
-                    atualizarVisibilidadeMenuAdmin(false);
-                    atualizarInterfaceUsuario();
-                    mostrarErroAutenticacao("Não foi possível carregar seu perfil. Verifique a conexão e tente entrar novamente.");
-                    if (isAdminRoute()) mostrarPainelAdminBloqueado("Não foi possível validar sua conta administrativa.");
+                    console.error("Não foi possível validar o acesso administrativo no servidor:", error);
+                    if (netlifyAdminPanelRoute) {
+                        document.documentElement.style.visibility = '';
+                        mostrarPainelAdminBloqueado("Não foi possível validar sua conta administrativa.");
+                        return;
+                    }
                 }
-            });
-        }
+                window.techAgendaNetlifyAdminSession =
+                    window.techAgendaBackend === 'netlify' && isAdmin;
+                window.techAgendaAdminSession =
+                    window.techAgendaBackend === 'local' && isAdmin;
+                window.techAgendaFirebaseAdmin = false;
+                atualizarVisibilidadeMenuAdmin(isAdmin);
+                atualizarInterfaceUsuario();
+                fecharModalLogin();
+                if (isAdmin) {
+                    if (!netlifyAdminPanelRoute) {
+                        window.location.assign('/admin/painel');
+                    } else {
+                        document.documentElement.style.visibility = '';
+                        liberarPainelAdmin();
+                        showSection('administracao');
+                    }
+                } else if (netlifyAdminPanelRoute) {
+                    document.documentElement.style.visibility = '';
+                    window.location.replace('/');
+                }
+            } catch (error) {
+                console.error("Erro ao validar o acesso administrativo:", error);
+                usuarioLogado = null;
+                window.techAgendaFirebaseAdmin = false;
+                window.techAgendaNetlifyAdminSession = false;
+                window.techAgendaAdminSession = false;
+                atualizarVisibilidadeMenuAdmin(false);
+                atualizarInterfaceUsuario();
+                if (netlifyAdminPanelRoute) {
+                    document.documentElement.style.visibility = '';
+                    mostrarPainelAdminBloqueado("Não foi possível validar sua conta administrativa.");
+                } else {
+                    mostrarErroAutenticacao("Não foi possível carregar seu perfil. Verifique a conexão e tente entrar novamente.");
+                }
+            }
+        });
+    }
+    if (new URLSearchParams(window.location.search).get('login') === 'google') {
+        abrirModalLogin();
     }
     garantirDataInicialReserva();
     trocarFotoReserva();
@@ -156,14 +181,8 @@ window.addEventListener('DOMContentLoaded', () => {
     atualizarTabela();
 });
 
-function selecionarTipoUsuario() {
-    if (document.getElementById('cad-tipo')?.value === 'Administrador') {
-        window.location.assign('/admin');
-    }
-}
-
 function isAdminRoute() {
-    return window.location.pathname.replace(/\/+$/, '') === '/admin';
+    return ['/admin', '/admin/painel'].includes(window.location.pathname.replace(/\/+$/, ''));
 }
 
 function isNetlifyAdminPanelRoute() {
@@ -218,29 +237,36 @@ async function chamarFuncaoFirebase(nome, dados = {}, exigeLogin = true) {
     return resultado.data;
 }
 
-async function validarSessaoNetlifyAdmin() {
-    try {
-        const response = await fetch('/.netlify/functions/admin-session', {
-            credentials: 'same-origin',
-            cache: 'no-store'
-        });
-        if (response.status === 401) {
-            window.location.replace('/admin');
-            return;
-        }
-        const result = await response.json();
-        if (!response.ok || result.authenticated !== true) {
-            throw new Error(result.error || 'Não foi possível validar a sessão administrativa.');
-        }
-        window.techAgendaNetlifyAdminSession = true;
-        atualizarVisibilidadeMenuAdmin(true);
-        document.documentElement.style.visibility = '';
-        liberarPainelAdmin();
-        showSection('administracao');
-    } catch (error) {
-        document.documentElement.style.visibility = '';
-        mostrarPainelAdminBloqueado(`${error.message} Acesse /admin para entrar novamente.`);
+async function iniciarSessaoAdminServidor(firebaseUser) {
+    const isLocal = window.techAgendaBackend === 'local';
+    const endpoint = isLocal
+        ? '/api/admin/session'
+        : '/.netlify/functions/admin-session';
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: await firebaseUser.getIdToken() })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 403) return false;
+    if (!response.ok) {
+        throw new Error(result.error || 'Não foi possível validar sua conta Google no servidor.');
     }
+    return result.authenticated === true;
+}
+
+async function encerrarSessaoAdminServidor() {
+    const endpoint = window.techAgendaBackend === 'local'
+        ? '/api/admin/logout'
+        : '/.netlify/functions/admin-logout';
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+    });
+    if (!response.ok) throw new Error('Não foi possível encerrar a sessão administrativa.');
 }
 
 async function apiNetlifyAdmin(action, data = {}) {
@@ -255,7 +281,7 @@ async function apiNetlifyAdmin(action, data = {}) {
     });
     const body = await response.json().catch(() => ({}));
     if (response.status === 401) {
-        window.location.assign('/admin');
+        window.location.assign('/?login=google');
         throw new Error(body.error || 'Sessão administrativa inválida ou expirada.');
     }
     if (!response.ok) throw new Error(body.error || `Falha ao executar a operação (${response.status}).`);
@@ -1778,7 +1804,6 @@ function obterOuCriarPerfil(firebaseUser) {
         const documento = await window.firestore.getDoc(referencia);
         const dadosExistentes = documento.exists() ? documento.data() : {};
         const tiposValidos = ["Aluno", "Professor"];
-        const tipoSelecionado = document.getElementById('cad-tipo')?.value;
         const perfil = {
             uid: firebaseUser.uid,
             nome: firebaseUser.displayName || dadosExistentes.nome || "Usuário",
@@ -1786,7 +1811,7 @@ function obterOuCriarPerfil(firebaseUser) {
             fotoURL: firebaseUser.photoURL || dadosExistentes.fotoURL || "",
             tipo: tiposValidos.includes(dadosExistentes.tipo)
                 ? dadosExistentes.tipo
-                : (tiposValidos.includes(tipoSelecionado) ? tipoSelecionado : "Aluno")
+                : "Aluno"
         };
         const dadosParaSalvar = {
             ...perfil,
@@ -1818,21 +1843,8 @@ async function realizarLoginGoogle() {
         }
         await api.setPersistence(window.firebaseAuth, api.browserLocalPersistence);
         const provedor = new api.GoogleAuthProvider();
-        const credencial = await api.signInWithPopup(window.firebaseAuth, provedor);
-        usuarioLogado = await obterOuCriarPerfil(credencial.user);
-        const token = await credencial.user.getIdTokenResult(true);
-        window.techAgendaFirebaseAdmin = token.claims.admin === true;
-        atualizarVisibilidadeMenuAdmin(window.techAgendaFirebaseAdmin);
-        atualizarInterfaceUsuario();
+        await api.signInWithPopup(window.firebaseAuth, provedor);
         fecharModalLogin();
-        if (isAdminRoute()) {
-            if (window.techAgendaFirebaseAdmin) {
-                liberarPainelAdmin();
-                showSection('administracao');
-            } else {
-                mostrarPainelAdminBloqueado("Esta conta Google não está autorizada como administradora.");
-            }
-        }
     } catch (error) {
         console.error("Erro ao autenticar com Google:", error);
         const mensagens = {
@@ -1850,36 +1862,14 @@ async function realizarLoginGoogle() {
 }
 
 async function sairDaConta() {
-    if (window.techAgendaNetlifyAdminSession) {
-        try {
-            const response = await fetch('/.netlify/functions/admin-logout', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: '{}'
-            });
-            if (!response.ok) throw new Error('Não foi possível encerrar a sessão administrativa.');
-            window.techAgendaNetlifyAdminSession = false;
-            window.location.assign('/admin');
-        } catch (error) {
-            console.error('Erro ao encerrar a sessão administrativa:', error);
-            alert(error.message || 'Não foi possível encerrar a sessão.');
-        }
-        return;
-    }
-
-    if (window.techAgendaAdminSession) {
-        const formularioLogout = document.createElement('form');
-        formularioLogout.method = 'post';
-        formularioLogout.action = '/admin/logout';
-        document.body.appendChild(formularioLogout);
-        formularioLogout.submit();
-        return;
-    }
-
     try {
+        if (window.techAgendaNetlifyAdminSession || window.techAgendaAdminSession) {
+            await encerrarSessaoAdminServidor();
+        }
         await window.firebaseAuthApi.signOut(window.firebaseAuth);
         window.techAgendaFirebaseAdmin = false;
+        window.techAgendaNetlifyAdminSession = false;
+        window.techAgendaAdminSession = false;
         atualizarVisibilidadeMenuAdmin(false);
         if (isAdminRoute()) {
             mostrarPainelAdminBloqueado("Entre com sua conta Google para acessar a administração.");

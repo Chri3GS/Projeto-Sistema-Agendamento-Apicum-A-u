@@ -1,250 +1,186 @@
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { after, before, test } = require('node:test');
+const { test } = require('node:test');
 const { createAdminServer } = require('./server');
 
-const username = 'centro123';
-const salt = crypto.randomBytes(16);
-const hash = crypto.scryptSync('centro123', salt, 64);
-const server = createAdminServer({
-    username,
-    passwordHash: `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`
-});
-let baseUrl;
+const adminToken = {
+    uid: 'uid-admin',
+    email: 'centrotec.apc@gmail.com',
+    email_verified: true,
+    firebase: { sign_in_provider: 'google.com' }
+};
 
-before(async () => {
+function createAuth() {
+    return {
+        async verifyIdToken(token, checkRevoked) {
+            assert.equal(checkRevoked, true);
+            if (token === 'google-admin') return adminToken;
+            if (token === 'google-user') {
+                return {
+                    uid: 'uid-user',
+                    email: 'user@example.com',
+                    email_verified: true,
+                    firebase: { sign_in_provider: 'google.com' }
+                };
+            }
+            throw Object.assign(new Error('invalid token'), { code: 'auth/invalid-id-token' });
+        }
+    };
+}
+
+async function withServer(server, operation) {
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    try {
+        await operation(baseUrl);
+    } finally {
+        await new Promise((resolve, reject) => server.close((error) =>
+            error ? reject(error) : resolve()
+        ));
+    }
+}
+
+async function establishAdminSession(baseUrl, idToken = 'google-admin') {
+    const response = await fetch(`${baseUrl}/api/admin/session`, {
+        method: 'POST',
+        headers: {
+            Origin: baseUrl,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ idToken })
+    });
+    return { response, cookie: response.headers.get('set-cookie')?.split(';')[0] };
+}
+
+test('protege URLs administrativas e remove o login por usuário e senha', async () => {
+    const server = createAdminServer();
+    await withServer(server, async (baseUrl) => {
+        const directPanel = await fetch(`${baseUrl}/admin/painel`, { redirect: 'manual' });
+        assert.equal(directPanel.status, 303);
+        assert.equal(directPanel.headers.get('location'), '/?login=google');
+
+        const adminPath = await fetch(`${baseUrl}/admin`, { redirect: 'manual' });
+        assert.equal(adminPath.status, 303);
+        assert.equal(adminPath.headers.get('location'), '/?login=google');
+        assert.equal((await fetch(`${baseUrl}/admin`, {
+            method: 'POST',
+            redirect: 'manual'
+        })).status, 404);
+
+        const home = await fetch(baseUrl);
+        const html = await home.text();
+        assert.equal(home.status, 200);
+        assert.match(html, /name="techagenda-backend" content="local"/);
+        assert.doesNotMatch(html, /Tipo de usuário|cad-tipo|Administrador<\/option>/);
+        assert.match(html, /Continuar com Google/);
+
+        assert.equal((await fetch(`${baseUrl}/api/admin/dashboard`)).status, 401);
+        const noToken = await fetch(`${baseUrl}/api/admin/session`, {
+            method: 'POST',
+            headers: { Origin: baseUrl, 'Content-Type': 'application/json' },
+            body: '{}'
+        });
+        assert.equal(noToken.status, 401);
+
+        const styles = await fetch(`${baseUrl}/admin.css`);
+        assert.equal(styles.status, 200);
+        assert.match(styles.headers.get('content-type'), /text\/css/);
+        assert.equal((await fetch(`${baseUrl}/server.js`)).status, 404);
+    });
 });
 
-after(async () => {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+test('somente o ID Token Google do UID autorizado cria sessão e libera o painel', async () => {
+    const dashboard = {
+        ambientes: [],
+        reservas: [],
+        resumo: { ambientes: 0, reservas: 0, ativas: 0 }
+    };
+    const server = createAdminServer({
+        adminUid: 'uid-admin',
+        firebaseAuth: createAuth(),
+        firebaseStore: { async getDashboard() { return dashboard; } }
+    });
+    await withServer(server, async (baseUrl) => {
+        const commonLogin = await establishAdminSession(baseUrl, 'google-user');
+        assert.equal(commonLogin.response.status, 403);
+        assert.match(commonLogin.response.headers.get('set-cookie'), /Max-Age=0/);
+
+        const noSession = await fetch(`${baseUrl}/api/admin/dashboard`);
+        assert.equal(noSession.status, 401);
+
+        const { response, cookie } = await establishAdminSession(baseUrl);
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('set-cookie'), /HttpOnly/);
+        assert.match(response.headers.get('set-cookie'), /SameSite=Strict/);
+
+        const panel = await fetch(`${baseUrl}/admin/painel`, {
+            headers: { Cookie: cookie }
+        });
+        assert.equal(panel.status, 200);
+        assert.match(await panel.text(), /name="techagenda-backend" content="local"/);
+
+        const protectedDashboard = await fetch(`${baseUrl}/api/admin/dashboard`, {
+            headers: { Cookie: cookie }
+        });
+        assert.equal(protectedDashboard.status, 200);
+        assert.deepEqual(await protectedDashboard.json(), dashboard);
+
+        const logout = await fetch(`${baseUrl}/api/admin/logout`, {
+            method: 'POST',
+            headers: { Origin: baseUrl, Cookie: cookie }
+        });
+        assert.equal(logout.status, 200);
+        assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
+        assert.equal((await fetch(`${baseUrl}/api/admin/dashboard`, {
+            headers: { Cookie: cookie }
+        })).status, 401);
+        assert.equal((await fetch(`${baseUrl}/admin/painel`, {
+            headers: { Cookie: cookie },
+            redirect: 'manual'
+        })).status, 303);
+    });
 });
 
-test('protege o painel contra acesso direto e permite login apenas com credenciais válidas', async () => {
-    const directAccess = await fetch(`${baseUrl}/admin/painel`, { redirect: 'manual' });
-    assert.equal(directAccess.status, 303);
-    assert.equal(directAccess.headers.get('location'), '/admin');
-
-    const loginPage = await fetch(`${baseUrl}/admin`);
-    assert.equal(loginPage.status, 200);
-    const loginHtml = await loginPage.text();
-    assert.match(loginHtml, /href="\/admin\.css"/);
-    assert.match(loginHtml, /src="\/imagens\/logo\.png"/);
-    assert.match(loginHtml, /type="password"/);
-
-    const adminStylesheet = await fetch(`${baseUrl}/admin.css`);
-    assert.equal(adminStylesheet.status, 200);
-    assert.match(adminStylesheet.headers.get('content-type'), /text\/css/);
-    assert.match(await adminStylesheet.text(), /\.admin-card/);
-
-    const adminLogo = await fetch(`${baseUrl}/imagens/logo.png`);
-    assert.equal(adminLogo.status, 200);
-    assert.match(adminLogo.headers.get('content-type'), /image\/png/);
-
-    const mainStylesheet = await fetch(`${baseUrl}/style.css`);
-    assert.equal(mainStylesheet.status, 200);
-    assert.match(mainStylesheet.headers.get('content-type'), /text\/css/);
-
-    const publicHome = await fetch(`${baseUrl}/`);
-    assert.equal(publicHome.status, 200);
-    assert.match(await publicHome.text(), /name="techagenda-admin-session" content="false"/);
-
-    const publicEnvironmentApi = await fetch(`${baseUrl}/api/ambientes`);
-    assert.equal(publicEnvironmentApi.status, 503);
-    assert.match((await publicEnvironmentApi.json()).error, /credenciais Firebase Admin/);
-
-    const unauthenticatedDashboard = await fetch(`${baseUrl}/api/admin/dashboard`);
-    assert.equal(unauthenticatedDashboard.status, 401);
-
-    const privateServerFile = await fetch(`${baseUrl}/server.js`);
-    assert.equal(privateServerFile.status, 404);
-
-    const invalidLogin = await fetch(`${baseUrl}/admin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username, password: 'incorreta' }),
-        redirect: 'manual'
-    });
-    assert.equal(invalidLogin.status, 401);
-    assert.match(await invalidLogin.text(), /Usuário ou senha incorretos/);
-    assert.equal(invalidLogin.headers.get('set-cookie'), null);
-
-    const validLogin = await fetch(`${baseUrl}/admin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username, password: 'centro123' }),
-        redirect: 'manual'
-    });
-    assert.equal(validLogin.status, 303);
-    assert.equal(validLogin.headers.get('location'), '/');
-    const cookie = validLogin.headers.get('set-cookie');
-    assert.match(cookie, /HttpOnly/);
-    assert.match(cookie, /SameSite=Strict/);
-    assert.match(cookie, /Path=\//);
-
-    const authenticatedHome = await fetch(`${baseUrl}/`, {
-        headers: { Cookie: cookie.split(';')[0] }
-    });
-    assert.equal(authenticatedHome.status, 200);
-    assert.match(await authenticatedHome.text(), /name="techagenda-admin-session" content="true"/);
-
-    const configuredDashboard = await fetch(`${baseUrl}/api/admin/dashboard`, {
-        headers: { Cookie: cookie.split(';')[0] }
-    });
-    assert.equal(configuredDashboard.status, 503);
-    assert.match((await configuredDashboard.json()).error, /Configure credenciais Firebase Admin/);
-
-    const authenticatedAdminRoute = await fetch(`${baseUrl}/admin`, {
-        headers: { Cookie: cookie.split(';')[0] },
-        redirect: 'manual'
-    });
-    assert.equal(authenticatedAdminRoute.status, 303);
-    assert.equal(authenticatedAdminRoute.headers.get('location'), '/');
-
-    const panel = await fetch(`${baseUrl}/admin/painel`, {
-        headers: { Cookie: cookie.split(';')[0] }
-    });
-    assert.equal(panel.status, 200);
-    const panelHtml = await panel.text();
-    assert.match(panelHtml, /href="\/admin\.css"/);
-    assert.match(panelHtml, /Painel Administrativo/);
-
-    const logout = await fetch(`${baseUrl}/admin/logout`, {
-        method: 'POST',
-        headers: { Cookie: cookie.split(';')[0] },
-        redirect: 'manual'
-    });
-    assert.equal(logout.status, 303);
-    assert.match(logout.headers.get('set-cookie'), /Path=\//);
-
-    const afterLogout = await fetch(`${baseUrl}/admin/painel`, {
-        headers: { Cookie: cookie.split(';')[0] },
-        redirect: 'manual'
-    });
-    assert.equal(afterLogout.status, 303);
-    const publicHomeAfterLogout = await fetch(`${baseUrl}/`, {
-        headers: { Cookie: logout.headers.get('set-cookie').split(';')[0] }
-    });
-    assert.match(await publicHomeAfterLogout.text(), /name="techagenda-admin-session" content="false"/);
-});
-
-test('recusa corpos JSON acima do limite sem executar a operação administrativa', async () => {
+test('recusa corpos JSON acima do limite antes de executar a operação administrativa', async () => {
     let operationCalled = false;
-    const oversizedBodyServer = createAdminServer({
-        username,
-        passwordHash: `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`,
+    const server = createAdminServer({
+        adminUid: 'uid-admin',
+        firebaseAuth: createAuth(),
         firebaseStore: {
-            saveEnvironment() {
+            async saveEnvironment() {
                 operationCalled = true;
             }
         }
     });
-    await new Promise((resolve) => oversizedBodyServer.listen(0, '127.0.0.1', resolve));
-    const testUrl = `http://127.0.0.1:${oversizedBodyServer.address().port}`;
-
-    try {
-        const login = await fetch(`${testUrl}/admin`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ username, password: 'centro123' }),
-            redirect: 'manual'
-        });
-        const cookie = login.headers.get('set-cookie').split(';')[0];
-        const response = await fetch(`${testUrl}/api/admin/ambientes`, {
+    await withServer(server, async (baseUrl) => {
+        const { response, cookie } = await establishAdminSession(baseUrl);
+        assert.equal(response.status, 200);
+        const oversized = await fetch(`${baseUrl}/api/admin/ambientes`, {
             method: 'POST',
             headers: {
                 Cookie: cookie,
-                'Content-Type': 'application/json',
-                Origin: testUrl
+                Origin: baseUrl,
+                'Content-Type': 'application/json'
             },
             body: 'x'.repeat(128 * 1024 + 1)
         });
-
-        assert.equal(response.status, 413);
-        assert.match((await response.json()).error, /excede o limite/);
+        assert.equal(oversized.status, 413);
+        assert.match((await oversized.json()).error, /excede o limite/);
         assert.equal(operationCalled, false);
-    } finally {
-        await new Promise((resolve, reject) => oversizedBodyServer.close((error) =>
-            error ? reject(error) : resolve()
-        ));
-    }
+    });
 });
 
-test('fluxo completo por uma origem: seleção administrativa, login, site autenticado e logout', async () => {
-    const home = await fetch(`${baseUrl}/`);
-    assert.equal(home.status, 200);
-    const homeHtml = await home.text();
-    assert.match(homeHtml, /Ambientes disponíveis/);
-    assert.match(homeHtml, /<option value="Aluno">Usuário<\/option>/);
-    assert.match(homeHtml, /Usuários entram com Google/);
-
+test('a tela de login não oferece seleção do tipo de usuário', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
     const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
-    const start = script.indexOf('function selecionarTipoUsuario()');
-    const end = script.indexOf('function isAdminRoute', start);
-    assert.ok(start >= 0 && end > start, 'encontrou o handler de seleção do tipo de usuário');
-    assert.match(homeHtml, /<option value="Administrador">Administrador<\/option>/);
-    assert.doesNotMatch(homeHtml, /<option value="Professor">Professor<\/option>/);
-    assert.doesNotMatch(script, /configurarAtalhoAdministrativo/);
 
-    let adminPath;
-    const selectedType = { value: 'Aluno' };
-    const browser = {
-        document: { getElementById: () => selectedType },
-        window: {
-            location: {
-                assign(location) {
-                    adminPath = new URL(location, baseUrl).pathname;
-                }
-            }
-        }
-    };
-    const selecionarTipo = vm.runInNewContext(
-        `${script.slice(start, end)}; selecionarTipoUsuario;`,
-        browser
-    );
-    selecionarTipo();
-    assert.equal(adminPath, undefined, 'Aluno continua no fluxo normal de login Google');
-    selectedType.value = 'Administrador';
-    selecionarTipo();
-    assert.equal(adminPath, '/admin');
-
-    const loginPage = await fetch(new URL(adminPath, baseUrl));
-    assert.equal(loginPage.status, 200);
-    assert.match(await loginPage.text(), /Acesso administrativo/);
-
-    const login = await fetch(new URL(adminPath, baseUrl), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username, password: 'centro123' }),
-        redirect: 'manual'
-    });
-    assert.equal(login.status, 303);
-    assert.equal(login.headers.get('location'), '/');
-    const sessionCookie = login.headers.get('set-cookie').split(';')[0];
-
-    const authenticatedHome = await fetch(baseUrl, {
-        headers: { Cookie: sessionCookie }
-    });
-    assert.equal(authenticatedHome.status, 200);
-    assert.match(await authenticatedHome.text(), /name="techagenda-admin-session" content="true"/);
-
-    const logout = await fetch(new URL('/admin/logout', baseUrl), {
-        method: 'POST',
-        headers: { Cookie: sessionCookie },
-        redirect: 'manual'
-    });
-    assert.equal(logout.status, 303);
-    assert.equal(logout.headers.get('location'), '/admin');
-
-    const homeAfterLogout = await fetch(baseUrl, {
-        headers: { Cookie: logout.headers.get('set-cookie').split(';')[0] }
-    });
-    assert.equal(homeAfterLogout.status, 200);
-    assert.match(await homeAfterLogout.text(), /name="techagenda-admin-session" content="false"/);
+    assert.match(html, /Continuar com Google/);
+    assert.doesNotMatch(html, /Tipo de usuário|cad-tipo|value="Administrador"/);
+    assert.doesNotMatch(script, /selecionarTipoUsuario|claims\.admin/);
+    assert.match(script, /iniciarSessaoAdminServidor/);
+    assert.match(script, /getIdToken\(\)/);
 });
 
 test('lista pública não substitui falhas do Firestore por reservas do cache local', async () => {

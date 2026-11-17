@@ -16,5 +16,5 @@
 
 [[redirects]]
   from = "/admin"
-  to = "/admin.html"
-  status = 200
+  to = "/?login=google"
+  status = 302

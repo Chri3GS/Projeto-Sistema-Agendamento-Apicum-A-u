@@ -4,18 +4,8 @@ const { test } = require('node:test');
 const {
     createSessionToken,
     sessionCookie,
-    verifyPassword,
     verifySessionToken
 } = require('../shared/admin-security');
-
-test('verifies the existing scrypt password hash format without exposing a password', async () => {
-    const salt = crypto.randomBytes(16);
-    const hash = crypto.scryptSync('secret-password', salt, 64);
-    const encoded = `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
-
-    assert.equal(await verifyPassword('secret-password', encoded), true);
-    assert.equal(await verifyPassword('wrong-password', encoded), false);
-});
 
 test('signs expiring sessions and rejects tampering or expired tokens', () => {
     const secret = crypto.randomBytes(32).toString('hex');

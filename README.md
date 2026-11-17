@@ -1,54 +1,46 @@
 # TechAgenda
 
-## Publicação no Netlify
+## Login e acesso administrativo
 
-O acesso administrativo no Netlify usa usuário e senha, sem exigir login Google:
+Todos entram pelo botão **Continuar com Google** no site. Não há seleção de perfil nem login administrativo por usuário e senha. O Firebase Authentication mantém a sessão Google; contas comuns usam o TechAgenda normalmente.
 
-1. No modal **Entrar no Sistema**, selecionar **Administrador** abre `/admin`; a seleção não autentica nem concede privilégios.
-2. O formulário existente de `/admin` envia as credenciais por HTTPS a uma Netlify Function.
-3. Após o login, o navegador recebe um cookie `HttpOnly`, `Secure` e `SameSite=Strict`, válido por oito horas.
-4. A sessão também é registrada em `adminSessions` no Firestore. A função confere assinatura, expiração e registro em todas as operações; sair revoga a sessão no servidor.
+O painel administrativo é protegido em duas camadas:
 
-O login Google dos usuários comuns permanece no site principal e continua sendo exigido para criar reservas. As senhas e chaves privadas não são incluídas no HTML/JavaScript nem armazenadas no `localStorage`.
+1. Depois do login, o navegador envia o Firebase ID Token à Netlify Function `admin-session`.
+2. A Function valida o token com Firebase Admin, exige o provedor Google, e-mail verificado `centrotec.apc@gmail.com` e o UID configurado em `ADMIN_UID`. A autorização nunca usa um e-mail informado pelo navegador.
+3. Só então o servidor cria uma sessão aleatória, assinada e armazenada em `adminSessions`, entregue por cookie `HttpOnly`, `Secure` e `SameSite=Strict`.
+4. As operações de gerenciamento, consultas administrativas e upload de imagens verificam a sessão no servidor. A saída revoga o registro da sessão e limpa o cookie; a saída do Firebase também encerra a sessão administrativa.
 
-### Variáveis de ambiente do Netlify
+Configure `ADMIN_UID` com o UID da conta `centrotec.apc@gmail.com` exibido em **Firebase Console → Authentication → Users**. Não use o e-mail como substituto do UID e não coloque esse valor em código client-side. Funções administrativas Firebase remanescentes também exigem esse UID no ambiente do servidor; custom claims não concedem mais acesso.
 
-No painel do site, abra **Project configuration → Environment variables** e configure as variáveis para as Functions. Marque como secretas as credenciais e restrinja o escopo às Functions quando a interface oferecer essa opção:
+### Netlify
 
-- `ADMIN_USERNAME`: usuário administrativo escolhido por você.
-- `ADMIN_PASSWORD_HASH`: hash no formato `scrypt$...`, nunca a senha em texto puro.
-- `ADMIN_SESSION_SECRET`: segredo aleatório de pelo menos 32 bytes. Gere localmente, por exemplo, com `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
-- `FIREBASE_ADMIN_SERVICE_ACCOUNT`: JSON compacto da conta de serviço Firebase, como variável secreta. Essa credencial fica somente no ambiente da função e precisa de acesso ao Firestore.
-- `FIREBASE_ADMIN_PROJECT_ID`: opcional; se definida, deve ser `sistema-agendamento-ct-apc`, o mesmo projeto configurado no site. As Functions do Netlify rejeitam um valor divergente para evitar consultar outra coleção/projeto.
+Em **Project configuration → Environment variables**, configure estas variáveis para as Functions. Restrinja seu escopo às Functions quando disponível:
 
-Crie uma conta de serviço no projeto Firebase com permissão mínima de leitura/gravação no Firestore (por exemplo, **Cloud Datastore User**) e copie seu JSON diretamente para a variável secreta do Netlify; não o salve no repositório. Para gerar o hash localmente, execute `npm run setup:admin` em uma cópia segura do projeto e informe um usuário próprio e uma senha de pelo menos 12 caracteres. O script grava os valores em `.env`, que está ignorado pelo Git. Copie somente `ADMIN_USERNAME` e `ADMIN_PASSWORD_HASH` para as variáveis do Netlify. Se `.env` já existir, o script não o sobrescreve. Nunca publique esse arquivo nem a conta de serviço.
+- `ADMIN_UID`: UID da conta Google administrativa autorizada.
+- `ADMIN_SESSION_SECRET`: segredo aleatório de pelo menos 32 bytes. Gere localmente com `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
+- `FIREBASE_ADMIN_SERVICE_ACCOUNT`: JSON da conta de serviço Firebase como variável secreta. Não salve esse JSON no repositório.
+- `FIREBASE_ADMIN_PROJECT_ID`: opcional; se configurado, deve ser `sistema-agendamento-ct-apc`.
 
-### Firebase e deploy
+A conta de serviço precisa acessar o Firestore para validar sessões e operar o painel. Mantenha Google habilitado em **Firebase Authentication → Sign-in method** e autorize os domínios Netlify e personalizado em **Authorized domains**. Não é necessário configurar `ADMIN_USERNAME`, senha administrativa ou custom claim.
 
-1. No Firebase Console, mantenha **Authentication → Google** habilitado e autorize o domínio Netlify e o domínio personalizado. O login administrativo não usa Firebase Authentication.
-2. Preserve o projeto e a coleção atuais do Firestore. As reservas existentes continuam em `reservas`; não faça importação nem exclusão durante a publicação. A lista pública e o painel administrativo consultam essa coleção no mesmo projeto; a lista não substitui falhas do Firestore por cópias locais.
-3. Mantenha as regras do Firestore que negam leituras e gravações diretas do navegador na coleção `reservas`. A lista pública carrega `/.netlify/functions/public-reservations`, que consulta o Firestore no servidor e retorna somente os campos públicos necessários. A criação de reservas é feita por `/.netlify/functions/reservations`, que valida o token Firebase no servidor e usa a transação do store existente; não depende de Cloud Functions nem de plano Blaze.
+Se as Firebase Callable Functions administrativas do diretório `functions/` também estiverem implantadas e forem usadas, configure `ADMIN_UID` no ambiente dessas Functions (por exemplo, em `.env.sistema-agendamento-ct-apc`) e atualize-as para esta versão. Sem essa configuração, elas negam o acesso; o painel Netlify usa as Netlify Functions.
 
-   ```sh
-   npm test
-   npm run build:netlify
-   ```
+As rotas `/admin` e `/admin/painel` não autenticam por conhecer a URL: `/admin` abre o login Google comum; o painel e suas APIs exigem autorização de servidor. O build do site pode ser validado com:
 
-4. No Netlify, use a pasta do projeto como **Base directory**. O `netlify.toml` define o comando `npm run build:netlify`, publica `dist/` e mantém `netlify/functions/` fora da pasta publicada. A versão Node configurada para o build é 22; confirme-a em **Project configuration → Build settings** se houver configuração de interface que a substitua.
-5. Publique a alteração no Netlify pelo deploy do commit/branch atualizado ou por **Deploy site → Trigger deploy**. As rotas `/admin` e `/admin/painel` continuam inalteradas.
+```sh
+npm test
+npm run build:netlify
+```
 
-As Functions administrativas usam o Firebase Admin SDK no servidor e as validações do store atual: ambientes duplicados não são criados, ambientes com reservas ativas não podem ser excluídos e cancelamentos/exclusões mantêm a auditoria. A função de reservas valida o token Firebase do usuário e usa transações para evitar sobreposição de horários. As regras do Firestore negam gravação direta do navegador em `ambientes`, `reservas`, sessões e auditoria; as Functions confiáveis operam com credenciais de servidor. Credenciais de serviço devem permanecer somente nas variáveis secretas do Netlify, nunca no frontend.
+Não faça deploy até configurar e validar as variáveis no Netlify.
 
-### Fotos dos ambientes
+## Dados e operações
 
-O painel envia JPG, PNG ou WebP de até 4 MB para o armazenamento persistente Netlify Blobs por uma Netlify Function protegida pela sessão administrativa. O servidor confere tipo, assinatura do arquivo e tamanho; o Firestore guarda somente o caminho de referência. Na edição, a foto atual permanece quando nenhuma nova é selecionada. As imagens dos ambientes existentes em `imagens/` e URLs HTTPS continuam aceitas.
+As reservas existentes permanecem na coleção `reservas`; não faça importação nem exclusão. As regras do Firestore continuam negando leitura e gravação direta do navegador para `reservas`, `ambientes`, sessões e auditoria. Reservas são criadas por Function com validação do ID Token. Operações administrativas confiáveis usam Firebase Admin no servidor. O painel mantém listagem, filtros, reservas, gerenciamento de ambientes, imagens em Netlify Blobs e consultas existentes ao Firestore.
 
-Esta implementação usa Netlify Blobs, sem provisionar Firebase Storage nem mudar o plano do Firebase. A documentação oficial do Firebase informa que Cloud Storage for Firebase não está disponível no plano Spark e requer Blaze ([requisitos do Spark/Blaze](https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024)). A página atual de [preços da Netlify](https://www.netlify.com/pricing/) inclui Blob storage no plano Free, sujeito aos limites/créditos de uso da conta; consulte o painel de faturamento do seu site antes de qualquer upgrade. Nenhuma cobrança ou recarga automática é configurada pelo código. Consulte também a [documentação de Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/).
+Fotos JPG, PNG e WebP de até 4 MB são validadas no servidor. As imagens dos ambientes e os dados atuais do Firestore não são removidos por esta alteração.
 
-## Execução local com o backend antigo
+## Execução local
 
-`server.js`, `setup-admin.js` e as rotas administrativas antigas foram mantidos. Para continuar usando o fluxo local, execute `npm run setup:admin` e `npm start`. O backend Node.js local continua usando suas próprias sessões; a hospedagem Netlify usa as Netlify Functions e não precisa de servidor Node.js permanente.
-
-## Testes
-
-Execute `npm test` na pasta do projeto. O build estático do Netlify pode ser validado com `npm run build:netlify`. Para validar operações reais, configure as variáveis do Netlify e use um projeto Firebase de teste antes da publicação final.
+`npm start` executa o servidor local. Para testar funcionalidades que acessam o Firestore, configure localmente `ADMIN_UID` e as credenciais Firebase Admin (por `FIREBASE_ADMIN_SERVICE_ACCOUNT` ou Application Default Credentials). O servidor local usa o mesmo fluxo: ID Token Google validado no servidor antes da criação da sessão.

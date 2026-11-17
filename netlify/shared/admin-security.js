@@ -1,21 +1,5 @@
 const crypto = require('node:crypto');
-const { promisify } = require('node:util');
-
-const scrypt = promisify(crypto.scrypt);
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-
-function readPasswordHash(value) {
-    const match = /^scrypt\$([a-f0-9]{32})\$([a-f0-9]{128})$/i.exec(value || '');
-    if (!match) throw new Error('ADMIN_PASSWORD_HASH ausente ou inválido.');
-    return { salt: Buffer.from(match[1], 'hex'), hash: Buffer.from(match[2], 'hex') };
-}
-
-async function verifyPassword(password, encodedHash) {
-    const { salt, hash } = readPasswordHash(encodedHash);
-    if (typeof password !== 'string' || Buffer.byteLength(password) > 1024) return false;
-    const candidate = await scrypt(password, salt, hash.length);
-    return crypto.timingSafeEqual(candidate, hash);
-}
 
 function requireSessionSecret(value) {
     if (typeof value !== 'string' || Buffer.byteLength(value) < 32) {
@@ -55,9 +39,7 @@ function sessionCookie(token, maxAge = SESSION_TTL_MS) {
 
 module.exports = {
     createSessionToken,
-    readPasswordHash,
     sessionCookie,
     SESSION_TTL_MS,
-    verifyPassword,
     verifySessionToken
 };

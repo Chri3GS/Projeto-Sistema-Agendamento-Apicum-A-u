@@ -2,14 +2,11 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const { promisify } = require('node:util');
 const { StoreError, createAdminStore } = require('./admin-store');
 
-const scrypt = promisify(crypto.scrypt);
 const root = __dirname;
 const sessions = new Map();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const MAX_BODY_BYTES = 4096;
 const MAX_JSON_BODY_BYTES = 128 * 1024;
 const FIREBASE_PROJECT_ID = 'sistema-agendamento-ct-apc';
 const MIME_TYPES = {
@@ -31,21 +28,6 @@ function loadEnv() {
             process.env[match[1]] = match[2];
         }
     }
-}
-
-function parsePasswordHash(value) {
-    const match = /^scrypt\$([a-f0-9]{32})\$([a-f0-9]{128})$/i.exec(value || '');
-    if (!match) {
-        throw new Error('ADMIN_PASSWORD_HASH ausente ou inválido. Execute npm run setup:admin.');
-    }
-    return { salt: Buffer.from(match[1], 'hex'), hash: Buffer.from(match[2], 'hex') };
-}
-
-function safeEqual(left, right) {
-    const leftBuffer = Buffer.from(left);
-    const rightBuffer = Buffer.from(right);
-    return leftBuffer.length === rightBuffer.length &&
-        crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function getSession(request) {
@@ -79,22 +61,27 @@ function initializeFirebaseAdminStore() {
                 credential,
                 projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || FIREBASE_PROJECT_ID
             }, 'techagenda-admin');
-        return createAdminStore({
-            db: getFirestore(app),
-            auth: getAuth(app),
-            FieldValue
-        });
+        const auth = getAuth(app);
+        return {
+            auth,
+            store: createAdminStore({
+                db: getFirestore(app),
+                auth,
+                FieldValue
+            })
+        };
     } catch (error) {
         console.error('Firebase Admin não pôde ser inicializado:', error.message);
         return null;
     }
 }
 
-function sendJson(response, statusCode, data) {
+function sendJson(response, statusCode, data, extraHeaders = {}) {
     response.writeHead(statusCode, {
         'Cache-Control': 'no-store',
         'Content-Type': 'application/json; charset=utf-8',
-        'X-Content-Type-Options': 'nosniff'
+        'X-Content-Type-Options': 'nosniff',
+        ...extraHeaders
     });
     response.end(JSON.stringify(data));
 }
@@ -159,95 +146,12 @@ function sendStoreError(response, error) {
     });
 }
 
-function sendHtml(response, statusCode, html, headers = {}) {
-    response.writeHead(statusCode, {
-        'Cache-Control': 'no-store',
-        'Content-Type': 'text/html; charset=utf-8',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'Referrer-Policy': 'same-origin',
-        ...headers
-    });
-    response.end(html);
-}
-
-function loginPage(errorMessage = '') {
-    const error = errorMessage
-        ? `<p class="error" role="alert">${errorMessage}</p>`
-        : '';
-    return `<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="referrer" content="same-origin">
-  <title>Login administrativo | TechAgenda</title>
-  <link rel="stylesheet" href="/admin.css">
-</head>
-<body>
-  <main class="admin-card">
-    <div class="brand"><img src="/imagens/logo.png" alt="TechAgenda"></div>
-    <h1>Acesso administrativo</h1>
-    <p class="subtitle">Entre com suas credenciais para acessar o painel.</p>
-    <form method="post" action="/admin">
-      <div class="field">
-        <label for="username">Usuário</label>
-        <input id="username" name="username" type="text" autocomplete="username" required autofocus>
-      </div>
-      <div class="field">
-        <label for="password">Senha</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-      </div>
-      ${error}
-      <button class="submit" type="submit">Entrar</button>
-    </form>
-  </main>
-</body>
-</html>`;
-}
-
-function panelPage() {
-    return `<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Painel Administrativo | TechAgenda</title>
-  <link rel="stylesheet" href="/admin.css">
-</head>
-<body>
-  <main class="admin-card panel-card">
-    <div class="brand"><img src="/imagens/logo.png" alt="TechAgenda"></div>
-    <h1>Painel Administrativo</h1>
-    <form method="post" action="/admin/logout">
-      <button class="logout" type="submit">Sair</button>
-    </form>
-  </main>
-</body>
-</html>`;
-}
-
-function readForm(request) {
-    return new Promise((resolve, reject) => {
-        let body = '';
-        request.on('data', (chunk) => {
-            body += chunk;
-            if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-                reject(new Error('Corpo da requisição excede o limite.'));
-                request.destroy();
-            }
-        });
-        request.on('end', () => resolve(new URLSearchParams(body)));
-        request.on('error', reject);
-    });
-}
-
 function redirect(response, location, headers = {}) {
     response.writeHead(303, { Location: location, 'Cache-Control': 'no-store', ...headers });
     response.end();
 }
 
-function serveStatic(request, response, pathname, isAdminSession = false) {
+function serveStatic(request, response, pathname) {
     let relativePath;
     try {
         relativePath = decodeURIComponent(pathname === '/' ? '/index.html' : pathname).slice(1);
@@ -290,10 +194,10 @@ function serveStatic(request, response, pathname, isAdminSession = false) {
                     response.writeHead(500).end('Não foi possível carregar o site.');
                     return;
                 }
-                const adminMarker = `name="techagenda-admin-session" content="${isAdminSession}"`;
+                const backendMarker = 'name="techagenda-backend" content="local"';
                 const page = html.replace(
-                    /name="techagenda-admin-session" content="false"/,
-                    adminMarker
+                    /name="techagenda-backend" content="netlify"/,
+                    backendMarker
                 );
                 response.writeHead(200, {
                     'Cache-Control': 'no-store',
@@ -313,9 +217,11 @@ function serveStatic(request, response, pathname, isAdminSession = false) {
     });
 }
 
-function createAdminServer({ username, passwordHash, firebaseStore = null }) {
-    const credentials = parsePasswordHash(passwordHash);
-
+function createAdminServer({
+    firebaseStore = null,
+    firebaseAuth = null,
+    adminUid = process.env.ADMIN_UID
+} = {}) {
     return http.createServer(async (request, response) => {
         let pathname;
         try {
@@ -357,6 +263,69 @@ function createAdminServer({ username, passwordHash, firebaseStore = null }) {
             }
         }
 
+        if (pathname === '/api/admin/session' && request.method === 'POST') {
+            if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Origem da requisição inválida.' });
+            if (!/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
+                return sendJson(response, 415, { error: 'Esta operação exige conteúdo JSON.' });
+            }
+            const previousSession = getSession(request);
+            if (previousSession) sessions.delete(previousSession.id);
+            let data;
+            try {
+                data = await readJson(request);
+            } catch (error) {
+                return sendStoreError(response, error);
+            }
+            if (typeof data.idToken !== 'string' || !data.idToken) {
+                return sendJson(response, 401, { error: 'Token do Firebase Authentication ausente.' });
+            }
+            if (!firebaseAuth || !adminUid) {
+                return sendJson(response, 503, {
+                    error: 'Configure Firebase Admin e ADMIN_UID no servidor para habilitar a administração.'
+                });
+            }
+            let decodedToken;
+            try {
+                decodedToken = await firebaseAuth.verifyIdToken(data.idToken, true);
+            } catch (error) {
+                return sendStoreError(response, error);
+            }
+            if (decodedToken.uid !== adminUid ||
+                decodedToken.email !== 'centrotec.apc@gmail.com' ||
+                decodedToken.email_verified !== true ||
+                decodedToken.firebase?.sign_in_provider !== 'google.com') {
+                const clearCookie = `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${
+                    request.socket.encrypted || process.env.NODE_ENV === 'production' ? '; Secure' : ''
+                }`;
+                return sendJson(response, 403, {
+                    error: 'Esta conta Google não tem permissão administrativa.'
+                }, { 'Set-Cookie': clearCookie });
+            }
+            const sessionId = crypto.randomBytes(32).toString('hex');
+            sessions.set(sessionId, {
+                uid: decodedToken.uid,
+                expiresAt: Date.now() + SESSION_TTL_MS
+            });
+            const secureCookie = request.socket.encrypted || process.env.NODE_ENV === 'production'
+                ? '; Secure'
+                : '';
+            return sendJson(response, 200, { authenticated: true }, {
+                'Set-Cookie': `techagenda_admin=${sessionId}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_MS / 1000}${secureCookie}`
+            });
+        }
+
+        if (pathname === '/api/admin/logout' && request.method === 'POST') {
+            if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Origem da requisição inválida.' });
+            const currentSession = getSession(request);
+            if (currentSession) sessions.delete(currentSession.id);
+            const secureCookie = request.socket.encrypted || process.env.NODE_ENV === 'production'
+                ? '; Secure'
+                : '';
+            return sendJson(response, 200, { ok: true }, {
+                'Set-Cookie': `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureCookie}`
+            });
+        }
+
         if (pathname.startsWith('/api/admin/')) {
             const adminSession = getSession(request);
             if (!adminSession) return sendJson(response, 401, { error: 'Autenticação administrativa obrigatória.' });
@@ -372,7 +341,7 @@ function createAdminServer({ username, passwordHash, firebaseStore = null }) {
             if (isMutation && !/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
                 return sendJson(response, 415, { error: 'Esta operação exige conteúdo JSON.' });
             }
-            const actor = adminSession.session.username;
+            const actor = adminSession.session.uid;
             try {
                 if (pathname === '/api/admin/dashboard' && request.method === 'GET') {
                     return sendJson(response, 200, await firebaseStore.getDashboard());
@@ -408,61 +377,12 @@ function createAdminServer({ username, passwordHash, firebaseStore = null }) {
         }
 
         if (pathname === '/admin' && request.method === 'GET') {
-            if (getSession(request)) return redirect(response, '/');
-            return sendHtml(response, 200, loginPage());
-        }
-
-        if (pathname === '/admin' && request.method === 'POST') {
-            let form;
-            try {
-                form = await readForm(request);
-            } catch (error) {
-                if (error.message === 'Corpo da requisição excede o limite.') {
-                    return response.writeHead(413).end('Requisição muito grande.');
-                }
-                console.error('Falha ao ler formulário administrativo:', error);
-                return response.writeHead(400).end('Requisição inválida.');
-            }
-
-            const submittedUsername = form.get('username') || '';
-            const submittedPassword = form.get('password') || '';
-            let submittedHash;
-            try {
-                submittedHash = await scrypt(submittedPassword, credentials.salt, 64);
-            } catch (error) {
-                console.error('Falha ao validar credenciais administrativas:', error);
-                return response.writeHead(500).end('Não foi possível validar o acesso.');
-            }
-
-            if (!safeEqual(submittedUsername, username) ||
-                !crypto.timingSafeEqual(submittedHash, credentials.hash)) {
-                return sendHtml(response, 401, loginPage('Usuário ou senha incorretos.'));
-            }
-
-            const sessionId = crypto.randomBytes(32).toString('hex');
-            sessions.set(sessionId, { expiresAt: Date.now() + SESSION_TTL_MS, username });
-            const secureCookie = request.socket.encrypted || process.env.NODE_ENV === 'production'
-                ? '; Secure'
-                : '';
-            return redirect(response, '/', {
-                'Set-Cookie': `techagenda_admin=${sessionId}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_MS / 1000}${secureCookie}`
-            });
+            return redirect(response, '/?login=google');
         }
 
         if (pathname === '/admin/painel' && request.method === 'GET') {
-            if (!getSession(request)) return redirect(response, '/admin');
-            return sendHtml(response, 200, panelPage());
-        }
-
-        if (pathname === '/admin/logout' && request.method === 'POST') {
-            const currentSession = getSession(request);
-            if (currentSession) sessions.delete(currentSession.id);
-            const secureCookie = request.socket.encrypted || process.env.NODE_ENV === 'production'
-                ? '; Secure'
-                : '';
-            return redirect(response, '/admin', {
-                'Set-Cookie': `techagenda_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureCookie}`
-            });
+            if (!getSession(request)) return redirect(response, '/?login=google');
+            return serveStatic(request, response, '/index.html');
         }
 
         if (pathname === '/admin' || pathname.startsWith('/admin/')) {
@@ -474,28 +394,23 @@ function createAdminServer({ username, passwordHash, firebaseStore = null }) {
             response.writeHead(405, { Allow: 'GET, HEAD' }).end('Método não permitido.');
             return;
         }
-        serveStatic(request, response, pathname, Boolean(getSession(request)));
+        serveStatic(request, response, pathname);
     });
 }
 
 if (require.main === module) {
     loadEnv();
-    const username = process.env.ADMIN_USERNAME;
-    if (!username) {
-        console.error('ADMIN_USERNAME ausente. Execute npm run setup:admin.');
-        process.exit(1);
-    }
 
     let server;
     try {
-        const firebaseStore = initializeFirebaseAdminStore();
-        if (!firebaseStore) {
+        const firebaseAdmin = initializeFirebaseAdminStore();
+        if (!firebaseAdmin) {
             console.warn('Firebase Admin não configurado. O site funciona, mas as APIs de gerenciamento ficam indisponíveis.');
         }
         server = createAdminServer({
-            username,
-            passwordHash: process.env.ADMIN_PASSWORD_HASH,
-            firebaseStore
+            firebaseStore: firebaseAdmin?.store,
+            firebaseAuth: firebaseAdmin?.auth,
+            adminUid: process.env.ADMIN_UID
         });
     } catch (error) {
         console.error(error.message);
@@ -506,7 +421,6 @@ if (require.main === module) {
     const host = process.env.HOST || '0.0.0.0';
     server.listen(port, host, () => {
         console.log(`TechAgenda disponível em http://${host}:${port}`);
-        console.log(`Login administrativo: http://${host}:${port}/admin`);
     });
 }
 
