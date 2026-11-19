@@ -295,6 +295,7 @@ test('a grade mostra somente manhã e tarde e não oferece o horário de almoço
         {
             document: { getElementById: (id) => elements[id] || null },
             ambientesCadastrados: [{
+                id: 'biblioteca',
                 nome: 'Biblioteca',
                 ativo: true,
                 diasDisponiveis: [5],
@@ -310,6 +311,9 @@ test('a grade mostra somente manhã e tarde e não oferece o horário de almoço
             },
             minutosEmHora: (minutes) =>
                 `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`,
+            disponibilidadeCarregada: true,
+            limitesAgendamentos: { biblioteca: 15 },
+            contarReservasSobrepostas: () => 3,
             verificarConflito: () => null
         }
     );
@@ -322,6 +326,7 @@ test('a grade mostra somente manhã e tarde e não oferece o horário de almoço
     assert.match(html, /Turno da Tarde/);
     assert.doesNotMatch(html, /Intervalo \/ Transição/);
     assert.doesNotMatch(html, /data-inicio="12:00"[^>]*data-fim="13:00"/);
+    assert.match(html, /12 de 15 vagas disponíveis/);
     assert.match(script, /if \(reservaCruzaIntervaloAlmoco\(horaInicio, horaFim\)\)/);
 });
 

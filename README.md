@@ -39,6 +39,8 @@ Não faça deploy até configurar e validar as variáveis no Netlify.
 
 As reservas existentes permanecem na coleção `reservas`; não faça importação nem exclusão. As regras do Firestore continuam negando leitura e gravação direta do navegador para `reservas`, `ambientes`, sessões e auditoria. Reservas são criadas por Function com validação do ID Token. Operações administrativas confiáveis usam Firebase Admin no servidor. O painel mantém listagem, filtros, reservas, gerenciamento de ambientes, imagens em Netlify Blobs e consultas existentes ao Firestore.
 
+Os limites de reservas simultâneas são mantidos em `functions/reservation-limits.js`: Biblioteca (15), Laboratório de Informática (20) e demais ambientes (1, incluindo as salas padrão). A alteração deve ser feita somente nessa configuração; ambientes personalizados sem limite explícito ficam limitados a uma reserva simultânea. A disponibilidade pública retorna apenas ambiente, situação e intervalo das reservas, além desses limites, sem dados pessoais.
+
 Fotos JPG, PNG e WebP de até 4 MB são validadas no servidor. As imagens dos ambientes e os dados atuais do Firestore não são removidos por esta alteração.
 
 ## Execução local

@@ -6,6 +6,8 @@
 let reservas = [];
 let todasAsReservas = [...reservas]; // Cache em memória das reservas confirmadas no servidor
 let reservasOcupadas = [];
+let limitesAgendamentos = {};
+let disponibilidadeCarregada = false;
 let usuarioLogado = null;
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
@@ -87,6 +89,10 @@ window.addEventListener('DOMContentLoaded', () => {
     atualizarOpcoesAmbiente();
     if (!adminPanelAtLoad) carregarAmbientesPublicos();
     carregarReservasDisponibilidade();
+    window.addEventListener('focus', carregarReservasDisponibilidade);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) carregarReservasDisponibilidade();
+    });
     if (!window.firebaseAuthApi || !window.firebaseAuth) {
         console.error("Firebase Authentication não foi inicializado.");
         mostrarErroAutenticacao("Não foi possível iniciar o Firebase Authentication. Verifique a conexão e a configuração.");
@@ -371,14 +377,17 @@ async function carregarReservasDisponibilidade() {
         if (!response.ok) {
             throw new Error(result.error || `Falha ao carregar disponibilidade (${response.status}).`);
         }
-        if (!Array.isArray(result)) {
-            throw new Error('A resposta do servidor não contém horários ocupados válidos.');
+        if (!result || !Array.isArray(result.reservas) ||
+            !result.limites || typeof result.limites !== 'object') {
+            throw new Error('A resposta do servidor não contém dados de disponibilidade válidos.');
         }
-        reservasOcupadas = result;
+        reservasOcupadas = result.reservas;
+        limitesAgendamentos = result.limites;
+        disponibilidadeCarregada = true;
         carregarGradeHorarios();
     } catch (error) {
         console.error('Erro ao carregar horários ocupados:', error);
-        reservasOcupadas = [];
+        carregarGradeHorarios();
     }
 }
 
@@ -1116,8 +1125,8 @@ function aoMudarHorarioManual() {
     const dataReserva = inputData ? inputData.value : getHojeFormatado();
     const ambiente = selectAmbiente ? selectAmbiente.value : "Biblioteca";
     const ambienteConfig = ambientesCadastrados.find((item) => item.nome === ambiente);
-    const horaAbertura = ambienteConfig?.abertura || CONFIG_CT.horaAbertura;
-    const horaFechamento = ambienteConfig?.fechamento || CONFIG_CT.horaFechamento;
+    const horaAbertura = ambienteConfig?.abertura > '08:00' ? ambienteConfig.abertura : '08:00';
+    const horaFechamento = ambienteConfig?.fechamento < '18:00' ? ambienteConfig.fechamento : '18:00';
 
     // Sincroniza campos ocultos legados
     sincronizarCamposLegados(dataReserva, horaInicio, horaFim);
@@ -1168,7 +1177,7 @@ function aoMudarHorarioManual() {
     // 4. Verificação em tempo real de conflito com reservas existentes
     const conflito = verificarConflito(ambiente, dataReserva, horaInicio, horaFim);
     if (conflito) {
-        mostrarAlertaReserva("erro", `⚠️ Conflito de Horário: Já existe uma reserva para ${ambiente} das ${conflito.horaInicio} às ${conflito.horaFim} (${conflito.usuario}).`);
+        mostrarAlertaReserva("erro", conflito.mensagem);
     } else {
         limparAlertaReserva();
     }
@@ -1270,38 +1279,37 @@ function extrairIntervaloReserva(res) {
 function verificarConflito(ambiente, dataReserva, horaInicio, horaFim) {
     if (!ambiente || !dataReserva || !horaInicio || !horaFim) return null;
 
+    const configuracaoAmbiente = ambientesCadastrados.find((room) => room.nome === ambiente);
+    if (!configuracaoAmbiente) return null;
+    const limite = Number.isInteger(limitesAgendamentos[configuracaoAmbiente.id])
+        ? limitesAgendamentos[configuracaoAmbiente.id]
+        : 1;
+    const sobreposicoes = contarReservasSobrepostas(
+        configuracaoAmbiente, dataReserva, horaInicio, horaFim
+    );
+    if (sobreposicoes < limite) return null;
+    return {
+        mensagem: limite === 1
+            ? 'Este horário já está ocupado.'
+            : 'O horário está lotado. Escolha outro período.'
+    };
+}
+
+function contarReservasSobrepostas(configuracaoAmbiente, dataReserva, horaInicio, horaFim) {
     const [hIni, mIni] = horaInicio.split(':').map(Number);
     const [hFim, mFim] = horaFim.split(':').map(Number);
-
     const [ano, mes, dia] = dataReserva.split('-').map(Number);
     const novoInicio = new Date(ano, mes - 1, dia, hIni, mIni, 0);
     const novoFim = new Date(ano, mes - 1, dia, hFim, mFim, 0);
-
-    for (const item of reservasOcupadas) {
-        if (item.status === 'cancelada') continue;
-        const configuracaoAmbiente = ambientesCadastrados.find((room) => room.nome === ambiente);
-        const nomesAssociados = configuracaoAmbiente
-            ? [configuracaoAmbiente.nome, ...configuracaoAmbiente.nomesAnteriores]
-            : [ambiente];
-        if (item.ambienteId !== configuracaoAmbiente?.id && !nomesAssociados.includes(item.ambiente)) continue;
-
+    const nomesAssociados = [configuracaoAmbiente.nome, ...(configuracaoAmbiente.nomesAnteriores || [])];
+    return reservasOcupadas.filter((item) => {
+        if (['cancelada', 'concluida', 'concluída', 'concluído', 'concluido',
+            'completed', 'finalizada', 'finalizado'].includes(String(item.status).toLocaleLowerCase('pt-BR')) ||
+            (item.ambienteId !== configuracaoAmbiente.id && !nomesAssociados.includes(item.ambiente))) return false;
         const info = extrairIntervaloReserva(item);
-        if (!info) continue;
-
-        // Verifica apenas se a reserva existente for na mesma data
-        if (info.dataStr !== dataReserva) continue;
-
-        // Condição de sobreposição: (novoInicio < existenteFim) && (novoFim > existenteInicio)
-        if (novoInicio < info.fim && novoFim > info.inicio) {
-            return {
-                horaInicio: info.horaInicio,
-                horaFim: info.horaFim,
-                ambiente: info.ambiente
-            };
-        }
-    }
-
-    return null;
+        return info && info.dataStr === dataReserva &&
+            novoInicio < info.fim && novoFim > info.inicio;
+    }).length;
 }
 
 // ==========================================
@@ -1335,13 +1343,17 @@ function carregarGradeHorarios() {
         container.innerHTML = '<p class="catalogo-vazio">Este ambiente não está disponível.</p>';
         return;
     }
+    if (!disponibilidadeCarregada) {
+        container.innerHTML = '<p class="catalogo-vazio">Não foi possível carregar a disponibilidade. Tente novamente.</p>';
+        return;
+    }
     const diaSemana = new Date(`${dataReserva}T00:00:00`).getDay();
     if (!ambienteConfig.diasDisponiveis.includes(diaSemana)) {
         container.innerHTML = '<p class="catalogo-vazio">Este ambiente não funciona na data selecionada.</p>';
         return;
     }
-    const minutoInicial = horaEmMinutos(ambienteConfig.abertura);
-    const minutoFinal = horaEmMinutos(ambienteConfig.fechamento);
+    const minutoInicial = Math.max(horaEmMinutos(ambienteConfig.abertura), 8 * 60);
+    const minutoFinal = Math.min(horaEmMinutos(ambienteConfig.fechamento), 18 * 60);
     const grupos = [
         { nome: '🌅 Turno da Manhã', slots: [] },
         { nome: '🌇 Turno da Tarde', slots: [] }
@@ -1404,21 +1416,35 @@ function carregarGradeHorarios() {
                 const conflito = verificarConflito(ambiente, dataReserva, slot.inicio, slot.fim);
                 if (conflito) {
                     status = 'ocupado';
-                    labelTag = 'Reservado';
-                    detalheTexto = 'Horário ocupado';
+                    const limite = Number.isInteger(limitesAgendamentos[ambienteConfig.id])
+                        ? limitesAgendamentos[ambienteConfig.id]
+                        : 1;
+                    labelTag = limite === 1 ? 'Reservado' : 'Lotado';
+                    detalheTexto = limite === 1 ? 'Horário ocupado' : 'Lotado';
                     disabled = 'disabled';
                     onClickAttr = '';
-                } else if (horaInicioSel && horaFimSel && horaFimSel > horaInicioSel) {
-                    // 3. Checa se está atualmente selecionado pelo usuário
-                    const [hSelIni, mSelIni] = horaInicioSel.split(':').map(Number);
-                    const [hSelFim, mSelFim] = horaFimSel.split(':').map(Number);
-                    const dtSelIni = new Date(ano, mes - 1, dia, hSelIni, mSelIni, 0);
-                    const dtSelFim = new Date(ano, mes - 1, dia, hSelFim, mSelFim, 0);
+                } else {
+                    const limite = Number.isInteger(limitesAgendamentos[ambienteConfig.id])
+                        ? limitesAgendamentos[ambienteConfig.id]
+                        : 1;
+                    if (limite > 1) {
+                        const reservasNoSlot = contarReservasSobrepostas(
+                            ambienteConfig, dataReserva, slot.inicio, slot.fim
+                        );
+                        detalheTexto = `${limite - reservasNoSlot} de ${limite} vagas disponíveis`;
+                        labelTag = 'Vagas';
+                    }
+                    if (horaInicioSel && horaFimSel && horaFimSel > horaInicioSel) {
+                        const [hSelIni, mSelIni] = horaInicioSel.split(':').map(Number);
+                        const [hSelFim, mSelFim] = horaFimSel.split(':').map(Number);
+                        const dtSelIni = new Date(ano, mes - 1, dia, hSelIni, mSelIni, 0);
+                        const dtSelFim = new Date(ano, mes - 1, dia, hSelFim, mSelFim, 0);
 
-                    if (dtSlotIni < dtSelFim && dtSlotFim > dtSelIni) {
-                        status = 'selecionado';
-                        labelTag = 'Selecionado';
-                        detalheTexto = 'Horário escolhido';
+                        if (dtSlotIni < dtSelFim && dtSlotFim > dtSelIni) {
+                            status = 'selecionado';
+                            labelTag = 'Selecionado';
+                            if (limite === 1) detalheTexto = 'Horário escolhido';
+                        }
                     }
                 }
             }
@@ -1528,7 +1554,8 @@ async function salvarReserva() {
     }
 
     // 5. Validação de expediente CT (08:00 às 18:00)
-    if (horaInicio < ambienteConfig.abertura || horaFim > ambienteConfig.fechamento) {
+    if (horaInicio < ambienteConfig.abertura || horaFim > ambienteConfig.fechamento ||
+        horaInicio < '08:00' || horaFim > '18:00') {
         mostrarAlertaReserva("erro", `🕒 Horário inválido: este ambiente funciona das ${ambienteConfig.abertura} às ${ambienteConfig.fechamento}.`);
         return;
     }
@@ -1552,8 +1579,7 @@ async function salvarReserva() {
     // 7. Validação estrita de conflito com reservas existentes
     const conflito = verificarConflito(ambiente, dataReserva, horaInicio, horaFim);
     if (conflito) {
-        mostrarAlertaReserva("erro", `⚠️ Conflito de Horário! Já existe uma reserva para o ambiente "${ambiente}" das ${conflito.horaInicio} às ${conflito.horaFim} agendada por ${conflito.usuario}. Escolha outro horário.`);
-        alert(`Não foi possível agendar: Horário conflitante com agendamento de ${conflito.usuario} (${conflito.horaInicio} às ${conflito.horaFim}).`);
+        mostrarAlertaReserva("erro", conflito.mensagem);
         return;
     }
 

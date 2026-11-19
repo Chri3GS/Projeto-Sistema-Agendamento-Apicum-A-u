@@ -1,4 +1,5 @@
 const { toReservationAvailability } = require('./reservation-availability');
+const { RESERVATION_LIMITS, reservationLimitFor } = require('./reservation-limits');
 
 const INITIAL_ENVIRONMENTS = [
     {
@@ -132,6 +133,13 @@ function validTime(value) {
 
 function intersectsLunchBreak(start, end) {
     return timeToMinutes(start) < 13 * 60 && timeToMinutes(end) > 12 * 60;
+}
+
+function outsideInstitutionalHours(start, end) {
+    return !(
+        (start >= '08:00' && end <= '12:00') ||
+        (start >= '13:00' && end <= '18:00')
+    );
 }
 
 function intervalForReservation(reservation) {
@@ -283,22 +291,34 @@ function createAdminStore({ db, auth, FieldValue }) {
     }
 
     async function listReservationAvailability() {
-        const reservationSnapshot = await reservations.select(
-            'ambienteId',
-            'ambiente',
-            'status',
-            'situacao',
-            'canceladoEm',
-            'dataReserva',
-            'horaInicio',
-            'horaFim',
-            'dataInicio',
-            'dataFim',
-            'data'
-        ).get();
-        return reservationSnapshot.docs.map((doc) =>
-            toReservationAvailability(serialize(doc.data()))
-        );
+        const [reservationSnapshot, environmentSnapshot] = await Promise.all([
+            reservations.select(
+                'ambienteId',
+                'ambiente',
+                'status',
+                'situacao',
+                'canceladoEm',
+                'dataReserva',
+                'horaInicio',
+                'horaFim',
+                'dataInicio',
+                'dataFim',
+                'data'
+            ).get(),
+            environments.select('nome').get()
+        ]);
+        const limits = Object.fromEntries([
+            ...Object.entries(RESERVATION_LIMITS),
+            ...environmentSnapshot.docs.map((doc) =>
+                [doc.id, reservationLimitFor(doc.id, doc.data().nome)]
+            )
+        ]);
+        return {
+            reservas: reservationSnapshot.docs.map((doc) =>
+                toReservationAvailability(serialize(doc.data()))
+            ),
+            limites: limits
+        };
     }
 
     async function getDashboard() {
@@ -440,6 +460,9 @@ function createAdminStore({ db, auth, FieldValue }) {
         if (intersectsLunchBreak(horaInicio, horaFim)) {
             throw new StoreError(400, 'O horário de almoço (12:00 às 13:00) não pode ser reservado.');
         }
+        if (outsideInstitutionalHours(horaInicio, horaFim)) {
+            throw new StoreError(400, 'O horário deve estar entre 08:00 e 12:00 ou 13:00 e 18:00.');
+        }
         const motivo = typeof input.motivo === 'string' ? input.motivo.trim().slice(0, 1000) : '';
         const environmentRef = environments.doc(ambienteId);
         const environmentSnapshot = await environmentRef.get();
@@ -457,8 +480,9 @@ function createAdminStore({ db, auth, FieldValue }) {
             throw new StoreError(400, 'Escolha um horário futuro dentro dos próximos 60 dias.');
         }
 
-        const lockRef = db.collection('agendaLocks').doc(`${ambienteId}_${dataReserva.replace(/-/g, '')}`);
+        const lockRef = db.collection('agendaLocks').doc(`reservas_${dataReserva.replace(/-/g, '')}`);
         const byId = reservations.where('ambienteId', '==', ambienteId);
+        const byUser = reservations.where('usuarioUid', '==', decoded.uid);
         const reservationRef = reservations.doc();
         await db.runTransaction(async (transaction) => {
             const environmentCurrent = await transaction.get(environmentRef);
@@ -475,25 +499,33 @@ function createAdminStore({ db, auth, FieldValue }) {
                 currentEnvironment.nome,
                 ...(currentEnvironment.nomesAnteriores || [])
             ])];
-            const [lock, idMatches] = await Promise.all([
+            const [lock, idMatches, userMatches] = await Promise.all([
                 transaction.get(lockRef),
-                transaction.get(byId)
+                transaction.get(byId),
+                transaction.get(byUser)
             ]);
             const nameMatches = await queryReservationsByNames(transaction, reservations, environmentNames);
             const existing = new Map();
             [...nameMatches, ...idMatches.docs].forEach((doc) => existing.set(doc.id, doc.data()));
             const startMinutes = timeToMinutes(horaInicio);
             const endMinutes = timeToMinutes(horaFim);
-            const conflict = [...existing.values()].some((reservation) => {
+            const overlaps = (reservation) => {
                 if (reservationStatus(reservation) !== 'ativa') return false;
                 const interval = intervalForReservation(reservation);
                 return interval && interval.date === dataReserva &&
                     startMinutes < timeToMinutes(interval.end) &&
                     endMinutes > timeToMinutes(interval.start);
-            });
-            if (conflict) throw new StoreError(409, 'Este horário acabou de ser reservado. Escolha outro horário.');
+            };
+            const userConflict = userMatches.docs.some((doc) => overlaps(doc.data()));
+            if (userConflict) {
+                throw new StoreError(409, 'Você já possui uma reserva ativa que se sobrepõe a este horário.');
+            }
+            const overlappingReservations = [...existing.values()].filter(overlaps);
+            const reservationLimit = reservationLimitFor(ambienteId, currentEnvironment.nome);
+            if (overlappingReservations.length >= reservationLimit) {
+                throw new StoreError(409, 'O limite de reservas simultâneas deste ambiente foi atingido.');
+            }
             transaction.set(lockRef, {
-                ambienteId,
                 dataReserva,
                 atualizadoEm: FieldValue.serverTimestamp(),
                 revisao: (lock.exists ? Number(lock.data().revisao) || 0 : 0) + 1
@@ -549,6 +581,7 @@ module.exports = {
     createAdminStore,
     INITIAL_ENVIRONMENTS,
     intersectsLunchBreak,
+    outsideInstitutionalHours,
     reservationStatus,
     StoreError,
     validateEnvironment

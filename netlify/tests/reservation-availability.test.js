@@ -20,14 +20,17 @@ test('disponibiliza somente dados mínimos de horários, sem identificadores pes
     const handler = createHandler(() => ({
         store: {
             async listReservationAvailability() {
-                return [{
-                    ambienteId: 'sala-01',
-                    ambiente: 'Sala 01',
-                    status: 'ativa',
-                    dataReserva: '2026-11-20',
-                    horaInicio: '10:00',
-                    horaFim: '11:00'
-                }];
+                return {
+                    reservas: [{
+                        ambienteId: 'sala-01',
+                        ambiente: 'Sala 01',
+                        status: 'ativa',
+                        dataReserva: '2026-11-20',
+                        horaInicio: '10:00',
+                        horaFim: '11:00'
+                    }],
+                    limites: { 'sala-01': 1 }
+                };
             }
         }
     }));
@@ -36,14 +39,17 @@ test('disponibiliza somente dados mínimos de horários, sem identificadores pes
     data = JSON.parse(response.body);
 
     assert.equal(response.statusCode, 200);
-    assert.deepEqual(data, [{
-        ambienteId: 'sala-01',
-        ambiente: 'Sala 01',
-        status: 'ativa',
-        dataReserva: '2026-11-20',
-        horaInicio: '10:00',
-        horaFim: '11:00'
-    }]);
+    assert.deepEqual(data, {
+        reservas: [{
+            ambienteId: 'sala-01',
+            ambiente: 'Sala 01',
+            status: 'ativa',
+            dataReserva: '2026-11-20',
+            horaInicio: '10:00',
+            horaFim: '11:00'
+        }],
+        limites: { 'sala-01': 1 }
+    });
     assert.doesNotMatch(response.body, /usuario|email|uid|motivo|responsável/i);
 });
 
