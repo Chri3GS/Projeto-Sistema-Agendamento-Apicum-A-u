@@ -155,7 +155,17 @@ function createFirestoreFixture(seedReservations = []) {
 
     const store = createAdminStore({
         db,
-        auth: { async verifyIdToken(token) { return { uid: token, name: token }; } },
+        auth: {
+            async verifyIdToken(token) {
+                return {
+                    uid: token,
+                    name: token,
+                    firebase: {
+                        sign_in_provider: token === 'not-google' ? 'password' : 'google.com'
+                    }
+                };
+            }
+        },
         FieldValue: { serverTimestamp: () => new Date() }
     });
     return { data, store };
@@ -323,4 +333,183 @@ test('bloqueia horários no almoço e fora das janelas de funcionamento', async 
             horaFim
         })), (error) => error instanceof StoreError && error.statusCode === 400);
     }
+});
+
+test('lista somente reservas do UID autenticado e não associa reservas legadas sem UID', async () => {
+    const { store } = createFirestoreFixture([
+        existingReservation('owner-a'),
+        existingReservation('owner-b', { horaInicio: '10:00', horaFim: '11:00' }),
+        { ambiente: 'Biblioteca', data: '25/11/2026 das 11:00 às 12:00', status: 'ativa' }
+    ]);
+
+    const ownReservations = await store.listUserReservations('owner-a');
+
+    assert.equal(ownReservations.length, 1);
+    assert.equal(ownReservations[0].motivo, '');
+    assert.equal(ownReservations[0].id, 'seed-0');
+    assert.equal(Object.hasOwn(ownReservations[0], 'usuarioUid'), false);
+});
+
+test('nega acesso a reserva de outro UID e exige provedor Google', async () => {
+    const { store } = createFirestoreFixture([
+        existingReservation('owner-b')
+    ]);
+
+    await assert.rejects(
+        store.updateUserReservation('seed-0', {
+            dataReserva: bookingDate(8),
+            horaInicio: '10:00',
+            horaFim: '11:00'
+        }, 'owner-a'),
+        (error) => error instanceof StoreError && error.statusCode === 404
+    );
+    await assert.rejects(
+        store.listUserReservations('not-google'),
+        (error) => error instanceof StoreError && error.statusCode === 403
+    );
+});
+
+test('altera a reserva existente, registra dados anteriores e notifica o administrador', async () => {
+    const { store, data } = createFirestoreFixture([
+        existingReservation('owner-a', { usuario: 'Ana', motivo: 'Reunião' })
+    ]);
+    const newDate = bookingDate(8);
+
+    await store.updateUserReservation('seed-0', {
+        dataReserva: newDate,
+        horaInicio: '14:00',
+        horaFim: '15:00'
+    }, 'owner-a');
+
+    const reservation = data.get('reservas').get('seed-0');
+    assert.equal(data.get('reservas').size, 1);
+    assert.equal(reservation.dataReserva, newDate);
+    assert.equal(reservation.horaInicio, '14:00');
+    assert.equal(reservation.motivo, 'Reunião');
+    const notifications = await store.listAdminNotifications();
+    assert.equal(notifications.length, 1);
+    assert.deepEqual(notifications[0].anterior, {
+        date: bookingDate(),
+        start: '09:00',
+        end: '10:00'
+    });
+    assert.deepEqual(notifications[0].novo, {
+        dataReserva: newDate,
+        horaInicio: '14:00',
+        horaFim: '15:00'
+    });
+    assert.equal(notifications[0].responsavel, 'Ana');
+});
+
+test('preserva a reserva quando há indisponibilidade, conflito do mesmo usuário ou almoço', async () => {
+    const { store, data } = createFirestoreFixture([
+        existingReservation('owner-a', {
+            ambienteId: 'sala-01',
+            ambiente: 'Sala 01'
+        }),
+        existingReservation('owner-b', {
+            ambienteId: 'sala-01',
+            ambiente: 'Sala 01',
+            dataReserva: bookingDate(8),
+            horaInicio: '10:00',
+            horaFim: '11:00'
+        }),
+        existingReservation('owner-a', {
+            ambienteId: 'biblioteca',
+            dataReserva: bookingDate(8),
+            horaInicio: '14:00',
+            horaFim: '15:00'
+        })
+    ]);
+    const original = { ...data.get('reservas').get('seed-0') };
+
+    for (const change of [
+        { dataReserva: bookingDate(8), horaInicio: '10:30', horaFim: '11:30' },
+        { dataReserva: bookingDate(8), horaInicio: '14:30', horaFim: '15:30' },
+        { dataReserva: bookingDate(9), horaInicio: '12:00', horaFim: '13:00' }
+    ]) {
+        await assert.rejects(
+            store.updateUserReservation('seed-0', change, 'owner-a'),
+            (error) => error instanceof StoreError && error.statusCode >= 400
+        );
+        assert.deepEqual(data.get('reservas').get('seed-0'), original);
+    }
+});
+
+test('cancela sem excluir o documento, libera a vaga e cria notificação lida pelo administrador', async () => {
+    const { store, data } = createFirestoreFixture([
+        existingReservation('owner-a', {
+            ambienteId: 'sala-01',
+            ambiente: 'Sala 01',
+            usuario: 'Ana'
+        })
+    ]);
+
+    await store.cancelUserReservation('seed-0', 'owner-a');
+    assert.equal(data.get('reservas').size, 1);
+    assert.equal(data.get('reservas').get('seed-0').status, 'cancelada');
+    await create(store, 'owner-b', booking('owner-b', {
+        ambienteId: 'sala-01',
+        horaInicio: '09:00',
+        horaFim: '10:00'
+    }));
+    assert.equal(data.get('reservas').size, 2);
+
+    const [notification] = await store.listAdminNotifications();
+    assert.equal(notification.tipo, 'reserva_cancelada');
+    assert.equal(notification.responsavel, 'Ana');
+    assert.equal(notification.lida, false);
+    await store.markAdminNotificationRead(notification.id);
+    assert.equal((await store.listAdminNotifications())[0].lida, true);
+});
+
+test('impede cancelar reservas alheias, canceladas ou encerradas', async () => {
+    const { store } = createFirestoreFixture([
+        existingReservation('owner-a'),
+        existingReservation('owner-b', { status: 'cancelada' }),
+        existingReservation('owner-c', { dataReserva: bookingDate(-1) })
+    ]);
+
+    await assert.rejects(
+        store.cancelUserReservation('seed-0', 'owner-b'),
+        (error) => error instanceof StoreError && error.statusCode === 404
+    );
+    await assert.rejects(
+        store.cancelUserReservation('seed-1', 'owner-b'),
+        (error) => error instanceof StoreError && error.statusCode === 409
+    );
+    await assert.rejects(
+        store.cancelUserReservation('seed-2', 'owner-c'),
+        (error) => error instanceof StoreError && error.statusCode === 409
+    );
+});
+
+test('transações simultâneas de alteração não excedem a capacidade do ambiente', async () => {
+    const { store } = createFirestoreFixture([
+        existingReservation('owner-a', {
+            ambienteId: 'sala-01',
+            ambiente: 'Sala 01',
+            horaInicio: '08:00',
+            horaFim: '09:00'
+        }),
+        existingReservation('owner-b', {
+            ambienteId: 'sala-01',
+            ambiente: 'Sala 01',
+            horaInicio: '10:00',
+            horaFim: '11:00'
+        })
+    ]);
+    const target = {
+        dataReserva: bookingDate(8),
+        horaInicio: '14:00',
+        horaFim: '15:00'
+    };
+
+    const results = await Promise.allSettled([
+        store.updateUserReservation('seed-0', target, 'owner-a'),
+        store.updateUserReservation('seed-1', target, 'owner-b')
+    ]);
+
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+    assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
 });

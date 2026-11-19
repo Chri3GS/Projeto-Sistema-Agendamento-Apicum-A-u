@@ -41,6 +41,12 @@ As reservas existentes permanecem na coleção `reservas`; não faça importaç�
 
 Os limites de reservas simultâneas são mantidos em `functions/reservation-limits.js`: Biblioteca (15), Laboratório de Informática (20) e demais ambientes (1, incluindo as salas padrão). A alteração deve ser feita somente nessa configuração; ambientes personalizados sem limite explícito ficam limitados a uma reserva simultânea. A disponibilidade pública retorna apenas ambiente, situação e intervalo das reservas, além desses limites, sem dados pessoais.
 
+### Minhas Reservas e notificações
+
+Usuários Google autenticados consultam, alteram e cancelam suas próprias reservas pela Function `user-reservations`. O backend valida o ID Token, usa o UID validado para filtrar e conferir a propriedade e aplica alterações em transação; disponibilidade, capacidade, horário de almoço e conflitos são revalidados no servidor. As notificações são gravadas em `adminNotifications` na mesma transação e ficam disponíveis apenas ao painel administrativo autenticado. As regras do Firestore continuam negando o acesso direto do cliente às reservas e notificações.
+
+Reservas antigas sem `usuarioUid` não são atribuídas a nenhuma conta e não aparecem em **Minhas Reservas**; continuam na Lista administrativa. Não há migração automática nem nova variável de ambiente necessária para esta funcionalidade.
+
 Fotos JPG, PNG e WebP de até 4 MB são validadas no servidor. As imagens dos ambientes e os dados atuais do Firestore não são removidos por esta alteração.
 
 ## Execução local

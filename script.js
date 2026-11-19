@@ -9,6 +9,8 @@ let reservasOcupadas = [];
 let limitesAgendamentos = {};
 let disponibilidadeCarregada = false;
 let usuarioLogado = null;
+let minhasReservas = [];
+let secaoPendenteAposLogin = window.sessionStorage.getItem('techagenda:pending-section');
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
 window.techAgendaAdminSession = false;
@@ -122,6 +124,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 }
                 atualizarVisibilidadeMenuAdmin(false);
                 atualizarInterfaceUsuario();
+                if (document.getElementById('minhas-reservas')?.style.display !== 'none') {
+                    showSection('home');
+                }
                 if (isAdminRoute()) {
                     document.documentElement.style.visibility = '';
                     mostrarPainelAdminBloqueado("Entre com sua conta Google para acessar a administração.");
@@ -193,17 +198,27 @@ window.addEventListener('DOMContentLoaded', () => {
                     console.error("Não foi possível validar o acesso administrativo no servidor:", error);
                 }
                 if (isAdmin) {
+                    const openUserReservations = secaoPendenteAposLogin === 'minhas-reservas' ||
+                        window.sessionStorage.getItem('techagenda:pending-section') === 'minhas-reservas';
                     window.techAgendaNetlifyAdminSession =
                         window.techAgendaBackend === 'netlify';
                     window.techAgendaAdminSession =
                         window.techAgendaBackend === 'local';
                     window.techAgendaFirebaseAdmin = false;
-                    window.history.replaceState(null, '', '/admin/painel');
+                    if (!openUserReservations) {
+                        window.history.replaceState(null, '', '/admin/painel');
+                    }
                     atualizarVisibilidadeMenuAdmin(true);
                     atualizarInterfaceUsuario();
                     fecharModalLogin();
                     liberarPainelAdmin();
-                    showSection('administracao');
+                    if (openUserReservations) {
+                        secaoPendenteAposLogin = null;
+                        window.sessionStorage.removeItem('techagenda:pending-section');
+                        showSection('minhas-reservas');
+                    } else {
+                        showSection('administracao');
+                    }
                     perfilPromise.then(({ perfil, error }) => {
                         if (error) {
                             console.error("Erro ao carregar o perfil autenticado:", error);
@@ -224,6 +239,12 @@ window.addEventListener('DOMContentLoaded', () => {
                 atualizarVisibilidadeMenuAdmin(false);
                 atualizarInterfaceUsuario();
                 fecharModalLogin();
+                if (secaoPendenteAposLogin === 'minhas-reservas' ||
+                    window.sessionStorage.getItem('techagenda:pending-section') === 'minhas-reservas') {
+                    secaoPendenteAposLogin = null;
+                    window.sessionStorage.removeItem('techagenda:pending-section');
+                    showSection('minhas-reservas');
+                }
             } catch (error) {
                 console.error("Erro ao validar o acesso administrativo:", error);
                 usuarioLogado = null;
@@ -426,6 +447,49 @@ async function apiJson(url, options = {}) {
     return body;
 }
 
+async function apiReservasUsuario(action, data = {}) {
+    const firebaseUser = window.firebaseAuth?.currentUser;
+    if (!firebaseUser) throw new Error('Entre com sua conta Google para gerenciar suas reservas.');
+    const token = await firebaseUser.getIdToken();
+    const endpoint = window.techAgendaBackend === 'local'
+        ? '/api/user/reservas'
+        : '/.netlify/functions/user-reservations';
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ action, ...data })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(result.error || `Não foi possível gerenciar a reserva (${response.status}).`);
+    }
+    return result;
+}
+
+async function consultarDisponibilidadeAtualizada() {
+    const endpoint = window.techAgendaBackend === 'local'
+        ? '/api/reservation-availability'
+        : '/.netlify/functions/reservation-availability';
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !Array.isArray(result.reservas) ||
+        !result.limites || typeof result.limites !== 'object') {
+        throw new Error(result.error || 'Não foi possível consultar a disponibilidade atual do ambiente.');
+    }
+    return result;
+}
+
 function normalizarAmbiente(data) {
     return {
         ...data,
@@ -556,6 +620,83 @@ function mostrarStatusAdmin(mensagem, tipo = 'erro') {
     status.hidden = !mensagem;
 }
 
+function formatarIntervaloNotificacao(intervalo) {
+    if (!intervalo) return '—';
+    const data = intervalo.dataReserva || intervalo.date;
+    const inicio = intervalo.horaInicio || intervalo.start;
+    const fim = intervalo.horaFim || intervalo.end;
+    return `${formatarDataBR(data)} das ${inicio} às ${fim}`;
+}
+
+function renderizarNotificacoesAdmin(notificacoes = []) {
+    const list = document.getElementById('admin-notifications-list');
+    const count = document.getElementById('admin-notification-count');
+    if (!list || !count) return;
+    const unreadCount = notificacoes.filter((item) => !item.lida).length;
+    count.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+    count.hidden = unreadCount === 0;
+    list.replaceChildren();
+
+    if (!notificacoes.length) {
+        const empty = document.createElement('p');
+        empty.className = 'admin-notification-empty';
+        empty.textContent = 'Nenhuma notificação recebida.';
+        list.appendChild(empty);
+        return;
+    }
+
+    notificacoes.forEach((notification) => {
+        const item = document.createElement('article');
+        item.className = `admin-notification-item${notification.lida ? ' lida' : ''}`;
+        const heading = document.createElement('h3');
+        heading.textContent = notification.tipo === 'reserva_cancelada'
+            ? 'Reserva cancelada'
+            : 'Reserva alterada';
+        const description = document.createElement('p');
+        description.textContent = `${notification.responsavel} • ${notification.ambiente}`;
+        const previous = document.createElement('p');
+        previous.textContent = `Antes: ${formatarIntervaloNotificacao(notification.anterior)}`;
+        const next = document.createElement('p');
+        next.textContent = notification.novo
+            ? `Depois: ${formatarIntervaloNotificacao(notification.novo)}`
+            : 'Depois: reserva cancelada';
+        item.append(heading, description, previous, next);
+        if (!notification.lida) {
+            const markRead = document.createElement('button');
+            markRead.type = 'button';
+            markRead.className = 'admin-action-button';
+            markRead.textContent = 'Marcar como lida';
+            markRead.addEventListener('click', () => marcarNotificacaoAdminComoLida(notification.id));
+            item.appendChild(markRead);
+        }
+        list.appendChild(item);
+    });
+}
+
+function toggleAdminNotifications() {
+    const panel = document.getElementById('admin-notifications-panel');
+    const button = document.querySelector('.admin-notification-toggle');
+    if (!panel || !button) return;
+    panel.hidden = !panel.hidden;
+    button.setAttribute('aria-expanded', String(!panel.hidden));
+}
+
+async function marcarNotificacaoAdminComoLida(id) {
+    try {
+        if (window.techAgendaNetlifyAdminSession) {
+            await apiNetlifyAdmin('markAdminNotificationRead', { id });
+        } else {
+            await apiJson(`/api/admin/notificacoes/${encodeURIComponent(id)}/lida`, {
+                method: 'PATCH',
+                body: '{}'
+            });
+        }
+        await carregarPainelAdmin();
+    } catch (error) {
+        mostrarStatusAdmin(error.message);
+    }
+}
+
 async function carregarPainelAdmin() {
     if (!temAcessoAdministrativo()) return;
     try {
@@ -581,6 +722,7 @@ async function carregarPainelAdmin() {
         document.getElementById('admin-total-ambientes').textContent = dashboard.resumo.ambientes;
         document.getElementById('admin-total-reservas').textContent = dashboard.resumo.reservas;
         document.getElementById('admin-reservas-ativas').textContent = dashboard.resumo.ativas;
+        renderizarNotificacoesAdmin(dashboard.notificacoes || []);
         atualizarOpcoesAmbiente();
         renderizarAmbientes();
         renderizarTabelaAdminAmbientes();
@@ -941,10 +1083,193 @@ async function excluirReservaAdmin(id) {
 // GERENCIAMENTO DE NAVEGAÇÃO E INTERFACE
 // ==========================================
 
+function mostrarStatusReservasUsuario(mensagem, erro = false) {
+    const status = document.getElementById('user-reservations-status');
+    if (!status) return;
+    status.textContent = mensagem;
+    status.className = `user-reservations-status${erro ? ' erro' : ''}`;
+}
+
+function reservaUsuarioEhFutura(reservation) {
+    if (!reservation.dataReserva || !reservation.horaInicio) return false;
+    const start = new Date(`${reservation.dataReserva}T${reservation.horaInicio}:00`);
+    return Number.isFinite(start.getTime()) && start > new Date();
+}
+
+function renderizarMinhasReservas() {
+    const list = document.getElementById('user-reservations-list');
+    if (!list) return;
+    list.replaceChildren();
+    if (!minhasReservas.length) {
+        const empty = document.createElement('p');
+        empty.className = 'user-reservations-empty';
+        empty.textContent = 'Não há reservas vinculadas a esta conta. Reservas antigas sem UID não podem ser identificadas automaticamente.';
+        list.appendChild(empty);
+        return;
+    }
+
+    minhasReservas.forEach((reservation) => {
+        const card = document.createElement('article');
+        card.className = 'user-reservation-card';
+        const heading = document.createElement('div');
+        heading.className = 'user-reservation-heading';
+        const title = document.createElement('h2');
+        title.textContent = reservation.ambiente || 'Ambiente';
+        const status = document.createElement('span');
+        status.className = `user-reservation-status-badge ${reservation.situacao}`;
+        status.textContent = {
+            ativa: 'Agendada',
+            concluida: 'Encerrada',
+            cancelada: 'Cancelada'
+        }[reservation.situacao] || 'Agendada';
+        heading.append(title, status);
+
+        const date = document.createElement('p');
+        date.textContent = `Data e horário: ${formatarDataBR(reservation.dataReserva)} • ${reservation.horaInicio} às ${reservation.horaFim}`;
+        const reason = document.createElement('p');
+        reason.textContent = `Motivo: ${reservation.motivo || 'Agendamento de ambiente'}`;
+        card.append(heading, date, reason);
+
+        if (reservation.situacao === 'ativa' && reservaUsuarioEhFutura(reservation)) {
+            const actions = document.createElement('div');
+            actions.className = 'user-reservation-actions';
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'admin-action-button';
+            editButton.textContent = 'Alterar data/horário';
+            editButton.addEventListener('click', () => abrirEdicaoReservaUsuario(reservation.id));
+            const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
+            cancelButton.className = 'admin-action-button danger';
+            cancelButton.textContent = 'Cancelar reserva';
+            cancelButton.addEventListener('click', () => cancelarReservaUsuario(reservation));
+            actions.append(editButton, cancelButton);
+            card.appendChild(actions);
+        }
+        list.appendChild(card);
+    });
+}
+
+async function carregarMinhasReservas() {
+    mostrarStatusReservasUsuario('Carregando suas reservas...');
+    try {
+        const result = await apiReservasUsuario('list');
+        if (!Array.isArray(result)) throw new Error('O servidor retornou uma lista de reservas inválida.');
+        minhasReservas = result;
+        mostrarStatusReservasUsuario('');
+        renderizarMinhasReservas();
+    } catch (error) {
+        minhasReservas = [];
+        renderizarMinhasReservas();
+        mostrarStatusReservasUsuario(error.message, true);
+    }
+}
+
+function abrirEdicaoReservaUsuario(id) {
+    const reservation = minhasReservas.find((item) => item.id === id);
+    if (!reservation || reservation.situacao !== 'ativa' || !reservaUsuarioEhFutura(reservation)) {
+        mostrarStatusReservasUsuario('Somente reservas futuras e ativas podem ser alteradas.', true);
+        return;
+    }
+    document.getElementById('editar-reserva-id').value = reservation.id;
+    document.getElementById('editar-reserva-data').value = reservation.dataReserva;
+    document.getElementById('editar-reserva-data').min = getHojeFormatado();
+    document.getElementById('editar-reserva-inicio').value = reservation.horaInicio;
+    document.getElementById('editar-reserva-fim').value = reservation.horaFim;
+    const status = document.getElementById('editar-reserva-status');
+    status.textContent = '';
+    status.classList.remove('erro');
+    document.getElementById('modalEditarReservaUsuario').style.display = 'flex';
+}
+
+function fecharEdicaoReservaUsuario() {
+    const modal = document.getElementById('modalEditarReservaUsuario');
+    if (modal) modal.style.display = 'none';
+}
+
+async function salvarEdicaoReservaUsuario(event) {
+    event.preventDefault();
+    const reservation = minhasReservas.find((item) =>
+        item.id === document.getElementById('editar-reserva-id').value
+    );
+    if (!reservation) return;
+    const data = {
+        dataReserva: document.getElementById('editar-reserva-data').value,
+        horaInicio: document.getElementById('editar-reserva-inicio').value,
+        horaFim: document.getElementById('editar-reserva-fim').value
+    };
+    const status = document.getElementById('editar-reserva-status');
+    const submit = event.currentTarget.querySelector('button[type="submit"]');
+    status.textContent = 'Consultando disponibilidade atual...';
+    status.classList.remove('erro');
+    submit.disabled = true;
+    try {
+        const availability = await consultarDisponibilidadeAtualizada();
+        const environment = ambientesCadastrados.find((item) =>
+            item.id === reservation.ambienteId || item.nome === reservation.ambiente
+        );
+        const environmentId = reservation.ambienteId || environment?.id || '';
+        const limit = Number(availability.limites[environmentId]) || 1;
+        const start = Number(data.horaInicio.slice(0, 2)) * 60 + Number(data.horaInicio.slice(3, 5));
+        const end = Number(data.horaFim.slice(0, 2)) * 60 + Number(data.horaFim.slice(3, 5));
+        const sameEnvironment = (item) => (
+            environmentId && item.ambienteId
+                ? item.ambienteId === environmentId
+                : item.ambiente === reservation.ambiente
+        );
+        const ownAvailabilityIndex = availability.reservas.findIndex((item) =>
+            sameEnvironment(item) && item.dataReserva === reservation.dataReserva &&
+            item.horaInicio === reservation.horaInicio && item.horaFim === reservation.horaFim
+        );
+        const occupied = availability.reservas.filter((item, index) => {
+            if (index === ownAvailabilityIndex || !sameEnvironment(item) ||
+                item.status === 'cancelada' ||
+                item.dataReserva !== data.dataReserva) return false;
+            const itemStart = Number(item.horaInicio?.slice(0, 2)) * 60 +
+                Number(item.horaInicio?.slice(3, 5));
+            const itemEnd = Number(item.horaFim?.slice(0, 2)) * 60 +
+                Number(item.horaFim?.slice(3, 5));
+            return start < itemEnd && end > itemStart;
+        }).length;
+        if (occupied >= limit) {
+            throw new Error('O horário escolhido não está mais disponível para este ambiente.');
+        }
+        status.textContent = 'Salvando alteração...';
+        await apiReservasUsuario('update', { id: reservation.id, data });
+        fecharEdicaoReservaUsuario();
+        await carregarMinhasReservas();
+        await carregarReservasDisponibilidade();
+    } catch (error) {
+        status.textContent = error.message;
+        status.classList.add('erro');
+    } finally {
+        submit.disabled = false;
+    }
+}
+
+async function cancelarReservaUsuario(reservation) {
+    if (!window.confirm(`Deseja cancelar sua reserva em ${reservation.ambiente} no dia ${formatarDataBR(reservation.dataReserva)}?`)) {
+        return;
+    }
+    try {
+        await apiReservasUsuario('cancel', { id: reservation.id });
+        await carregarMinhasReservas();
+        await carregarReservasDisponibilidade();
+    } catch (error) {
+        mostrarStatusReservasUsuario(error.message, true);
+    }
+}
+
 function showSection(sectionId, element) {
+    if (sectionId === 'minhas-reservas' && !window.firebaseAuth?.currentUser) {
+        secaoPendenteAposLogin = 'minhas-reservas';
+        window.sessionStorage.setItem('techagenda:pending-section', secaoPendenteAposLogin);
+        abrirModalLogin();
+        return;
+    }
     if (sectionId === 'lista' && !temAcessoAdministrativo()) {
         atualizarVisibilidadeMenuAdmin(false);
-        showSection('home', document.querySelector('.nav-links li'));
+        showSection('home', document.getElementById('menu-ambientes'));
         return;
     }
     if (sectionId === 'administracao' && !temAcessoAdministrativo()) {
@@ -969,12 +1294,15 @@ function showSection(sectionId, element) {
     if (element) {
         element.classList.add('active');
     } else {
-        const abas = { 'home': 0, 'reserva': 1, 'lista': 2, 'falarComCt': 3 };
-        const indice = abas[sectionId];
-        if (indice !== undefined) {
-            const itensMenu = document.querySelectorAll('.nav-links li');
-            if (itensMenu[indice]) itensMenu[indice].classList.add('active');
-        }
+        const menuIds = {
+            home: 'menu-ambientes',
+            reserva: 'menu-reserva',
+            'minhas-reservas': 'menu-minhas-reservas',
+            lista: 'menu-lista',
+            falarComCt: 'menu-falar',
+            administracao: 'menu-admin'
+        };
+        document.getElementById(menuIds[sectionId])?.classList.add('active');
     }
 
     // 4. Se for a tela de reserva, atualiza a grade de disponibilidade
@@ -984,6 +1312,9 @@ function showSection(sectionId, element) {
     }
     if (sectionId === 'lista') {
         atualizarTabela();
+    }
+    if (sectionId === 'minhas-reservas') {
+        carregarMinhasReservas();
     }
     if (sectionId === 'administracao' && temAcessoAdministrativo()) {
         carregarPainelAdmin();

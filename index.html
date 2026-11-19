@@ -32,16 +32,19 @@
         <img src="imagens/logo.png" alt="">
     </div>
     <ul class="nav-links">
-    <li class="active" onclick="showSection('home', this)">
+    <li id="menu-ambientes" class="active" onclick="showSection('home', this)">
         <img src="imagens/icone home.png" class="nav-icon"> Ambientes
     </li>
-    <li onclick="showSection('reserva', this)">
+    <li id="menu-reserva" onclick="showSection('reserva', this)">
         <img src="imagens/icone reserva.png" class="nav-icon"> Reserva
+    </li>
+    <li id="menu-minhas-reservas" onclick="showSection('minhas-reservas', this)">
+        <img src="imagens/icone lista.png" class="nav-icon"> Minhas Reservas
     </li>
     <li id="menu-lista" hidden onclick="showSection('lista', this)">
         <img src="imagens/icone lista.png" class="nav-icon"> Lista
     </li>
-    <li onclick="showSection('falarComCt', this)">
+    <li id="menu-falar" onclick="showSection('falarComCt', this)">
         <img src="imagens/icone falar com CT.png" class="nav-icon"> Falar com o CT
     </li>
     <li id="menu-admin" hidden onclick="showSection('administracao', this)">
@@ -155,9 +158,19 @@
                 </div>
                 <div class="admin-header-actions">
                     <button class="btn-info admin-refresh" type="button" onclick="carregarPainelAdmin()">Atualizar dados</button>
+                    <button class="admin-notification-toggle" type="button" onclick="toggleAdminNotifications()" aria-label="Abrir notificações administrativas" aria-expanded="false">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"></path></svg>
+                        <span>Notificações</span><strong id="admin-notification-count" hidden>0</strong>
+                    </button>
                     <button class="btn-primary admin-logout" type="button" onclick="sairDaConta()">Sair da administração</button>
                 </div>
             </header>
+            <section id="admin-notifications-panel" class="admin-notifications-panel" aria-label="Notificações administrativas" hidden>
+                <div class="admin-panel-heading">
+                    <div><h2>Notificações</h2><p>Alterações e cancelamentos feitos pelos usuários.</p></div>
+                </div>
+                <div id="admin-notifications-list" class="admin-notifications-list"></div>
+            </section>
             <div id="admin-status" class="admin-status" role="status" hidden></div>
             <div class="admin-stats">
                 <article class="admin-stat-card"><span>Ambientes cadastrados</span><strong id="admin-total-ambientes">—</strong></article>
@@ -231,6 +244,20 @@
                     </table>
                 </div>
             </section>
+        </section>
+
+        <section id="minhas-reservas" class="view" style="display:none;">
+            <header class="reservation-list-header">
+                <div class="reservation-list-heading">
+                    <div>
+                        <p class="reservation-list-eyebrow">AGENDA DO CENTRO TECNOLÓGICO</p>
+                        <h1>Minhas Reservas</h1>
+                        <p class="reservation-list-description">Consulte e gerencie seus agendamentos.</p>
+                    </div>
+                </div>
+            </header>
+            <p id="user-reservations-status" class="user-reservations-status" role="status" aria-live="polite"></p>
+            <div id="user-reservations-list" class="user-reservations-list"></div>
         </section>
 
         <section id="lista" class="view" style="display:none;">
@@ -414,6 +441,25 @@
             <button class="btn-info" onclick="fecharModalConfirmacao()">Novo Agendamento</button>
             <button class="btn-primary" id="btn-confirmacao-lista" onclick="irParaListaReservas()" hidden>Ver na Lista</button>
         </div>
+    </div>
+</div>
+<div id="modalEditarReservaUsuario" class="modal">
+    <div class="modal-content user-reservation-edit-content">
+        <div class="modal-header">
+            <h2>Alterar reserva</h2>
+            <button type="button" class="close-modal" aria-label="Fechar" onclick="fecharEdicaoReservaUsuario()">&times;</button>
+        </div>
+        <form id="form-editar-reserva-usuario" class="user-reservation-edit-form" onsubmit="salvarEdicaoReservaUsuario(event)">
+            <input id="editar-reserva-id" type="hidden">
+            <label>Data<input id="editar-reserva-data" type="date" required></label>
+            <label>Início<input id="editar-reserva-inicio" type="time" min="08:00" max="17:30" step="1800" required></label>
+            <label>Término<input id="editar-reserva-fim" type="time" min="08:30" max="18:00" step="1800" required></label>
+            <p id="editar-reserva-status" class="user-reservations-status" role="status" aria-live="polite"></p>
+            <div class="user-reservation-edit-actions">
+                <button class="btn-primary" type="submit">Salvar alteração</button>
+                <button class="btn-info" type="button" onclick="fecharEdicaoReservaUsuario()">Voltar</button>
+            </div>
+        </form>
     </div>
 </div>
 <script type="module">

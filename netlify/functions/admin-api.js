@@ -30,6 +30,11 @@ function createHandler(
             switch (request.action) {
                 case 'dashboard':
                     return sendJson(200, await store.getDashboard());
+                case 'listAdminNotifications':
+                    return sendJson(200, await store.listAdminNotifications());
+                case 'markAdminNotificationRead':
+                    await store.markAdminNotificationRead(request.id);
+                    return sendJson(200, { ok: true });
                 case 'listReservations':
                     return sendJson(200, await store.listReservations());
                 case 'saveEnvironment':

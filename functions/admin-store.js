@@ -196,6 +196,19 @@ function institutionalTime(date, time) {
     return Date.UTC(year, month - 1, day, hours, minutes) + safeOffset * 60 * 1000;
 }
 
+function validDate(value) {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+        Number.isFinite(new Date(`${value}T00:00:00Z`).getTime()) &&
+        new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+}
+
+function assertGoogleUser(decoded) {
+    if (!decoded || typeof decoded.uid !== 'string' || !decoded.uid ||
+        decoded.firebase?.sign_in_provider !== 'google.com') {
+        throw new StoreError(403, 'Entre com uma conta Google para gerenciar suas reservas.');
+    }
+}
+
 function serialize(value) {
     if (value && typeof value.toDate === 'function') return value.toDate().toISOString();
     if (value instanceof Date) return value.toISOString();
@@ -221,6 +234,7 @@ function createAdminStore({ db, auth, FieldValue }) {
     const environments = db.collection('ambientes');
     const reservations = db.collection('reservas');
     const auditLogs = db.collection('adminAuditoria');
+    const adminNotifications = db.collection('adminNotifications');
     let seedPromise;
 
     async function seedExistingEnvironments() {
@@ -322,13 +336,15 @@ function createAdminStore({ db, auth, FieldValue }) {
     }
 
     async function getDashboard() {
-        const [environmentItems, reservationsWithStatus] = await Promise.all([
+        const [environmentItems, reservationsWithStatus, notifications] = await Promise.all([
             listEnvironments(true),
-            listReservations()
+            listReservations(),
+            listAdminNotifications()
         ]);
         return {
             ambientes: environmentItems,
             reservas: reservationsWithStatus,
+            notificacoes: notifications,
             resumo: {
                 ambientes: environmentItems.length,
                 reservas: reservationsWithStatus.length,
@@ -439,6 +455,220 @@ function createAdminStore({ db, auth, FieldValue }) {
             transaction.delete(ref);
             transaction.create(auditRef, auditEntry(actor, 'reserva_excluida', 'reserva', id, snapshot.data()));
         });
+    }
+
+    async function listUserReservations(idToken) {
+        const decoded = await auth.verifyIdToken(idToken, true);
+        assertGoogleUser(decoded);
+        const snapshot = await reservations.where('usuarioUid', '==', decoded.uid).get();
+        return snapshot.docs.map((doc) => {
+            const reservation = serialize(doc.data());
+            return {
+                id: doc.id,
+                ambienteId: reservation.ambienteId || '',
+                ambiente: reservation.ambiente || '',
+                motivo: reservation.motivo || '',
+                dataReserva: intervalForReservation(reservation)?.date || '',
+                horaInicio: intervalForReservation(reservation)?.start || '',
+                horaFim: intervalForReservation(reservation)?.end || '',
+                situacao: reservationStatus(reservation),
+                data: reservation.data || ''
+            };
+        }).sort((left, right) =>
+            `${left.dataReserva}T${left.horaInicio}`.localeCompare(`${right.dataReserva}T${right.horaInicio}`)
+        );
+    }
+
+    async function updateUserReservation(id, input, idToken) {
+        const decoded = await auth.verifyIdToken(idToken, true);
+        assertGoogleUser(decoded);
+        const reservationRef = reservations.doc(documentId(id));
+        if (!input || typeof input !== 'object' || Array.isArray(input) ||
+            !validDate(input.dataReserva) || !validTime(input.horaInicio) ||
+            !validTime(input.horaFim) || input.horaInicio >= input.horaFim) {
+            throw new StoreError(400, 'Data e horário da reserva inválidos.');
+        }
+        if (intersectsLunchBreak(input.horaInicio, input.horaFim)) {
+            throw new StoreError(400, 'O horário de almoço (12:00 às 13:00) não pode ser reservado.');
+        }
+        if (outsideInstitutionalHours(input.horaInicio, input.horaFim)) {
+            throw new StoreError(400, 'O horário deve estar entre 08:00 e 12:00 ou 13:00 e 18:00.');
+        }
+        const now = Date.now();
+        const newStart = institutionalTime(input.dataReserva, input.horaInicio);
+        if (newStart <= now || newStart > now + 60 * 24 * 60 * 60 * 1000) {
+            throw new StoreError(400, 'Escolha um horário futuro dentro dos próximos 60 dias.');
+        }
+
+        const notificationRef = adminNotifications.doc();
+        await db.runTransaction(async (transaction) => {
+            const reservationSnapshot = await transaction.get(reservationRef);
+            if (!reservationSnapshot.exists ||
+                reservationSnapshot.data().usuarioUid !== decoded.uid) {
+                throw new StoreError(404, 'Reserva não encontrada.');
+            }
+            const reservation = reservationSnapshot.data();
+            const oldInterval = intervalForReservation(reservation);
+            if (reservationStatus(reservation) !== 'ativa' || !oldInterval ||
+                institutionalTime(oldInterval.date, oldInterval.start) <= Date.now()) {
+                throw new StoreError(409, 'Somente reservas futuras e ativas podem ser alteradas.');
+            }
+            const environmentId = documentId(reservation.ambienteId);
+            const environmentRef = environments.doc(environmentId);
+            const environmentSnapshot = await transaction.get(environmentRef);
+            if (!environmentSnapshot.exists || environmentSnapshot.data().ativo === false) {
+                throw new StoreError(409, 'Este ambiente está temporariamente indisponível.');
+            }
+            const environment = environmentSnapshot.data();
+            const day = new Date(`${input.dataReserva}T00:00:00Z`).getUTCDay();
+            if (!Array.isArray(environment.diasDisponiveis) ||
+                !environment.diasDisponiveis.includes(day) ||
+                input.horaInicio < environment.abertura || input.horaFim > environment.fechamento) {
+                throw new StoreError(409, 'O horário está fora da disponibilidade do ambiente.');
+            }
+
+            const datesToLock = [...new Set([oldInterval.date, input.dataReserva])];
+            const lockRefs = datesToLock.map((date) =>
+                db.collection('agendaLocks').doc(`reservas_${date.replace(/-/g, '')}`)
+            );
+            const environmentNames = [...new Set([
+                environment.nome,
+                ...(environment.nomesAnteriores || [])
+            ])];
+            const byEnvironmentId = reservations.where('ambienteId', '==', environmentId);
+            const byUser = reservations.where('usuarioUid', '==', decoded.uid);
+            const [locks, idMatches, userMatches, nameMatches] = await Promise.all([
+                Promise.all(lockRefs.map((ref) => transaction.get(ref))),
+                transaction.get(byEnvironmentId),
+                transaction.get(byUser),
+                queryReservationsByNames(transaction, reservations, environmentNames)
+            ]);
+            const existing = new Map();
+            [...idMatches.docs, ...nameMatches].forEach((doc) => existing.set(doc.id, doc.data()));
+            const overlaps = (item, date, start, end) => {
+                if (reservationStatus(item) !== 'ativa') return false;
+                const interval = intervalForReservation(item);
+                return interval && interval.date === date &&
+                    timeToMinutes(start) < timeToMinutes(interval.end) &&
+                    timeToMinutes(end) > timeToMinutes(interval.start);
+            };
+            const userConflict = userMatches.docs.some((doc) =>
+                doc.id !== reservationRef.id &&
+                overlaps(doc.data(), input.dataReserva, input.horaInicio, input.horaFim)
+            );
+            if (userConflict) {
+                throw new StoreError(409, 'Você já possui uma reserva ativa que se sobrepõe a este horário.');
+            }
+            const environmentConflicts = [...existing.entries()].filter(([reservationId, item]) =>
+                reservationId !== reservationRef.id &&
+                overlaps(item, input.dataReserva, input.horaInicio, input.horaFim)
+            );
+            if (environmentConflicts.length >= reservationLimitFor(environmentId, environment.nome)) {
+                throw new StoreError(409, 'O horário não está disponível ou o limite de reservas simultâneas foi atingido.');
+            }
+
+            const data = {
+                dataReserva: input.dataReserva,
+                horaInicio: input.horaInicio,
+                horaFim: input.horaFim,
+                dataInicio: `${input.dataReserva}T${input.horaInicio}:00`,
+                dataFim: `${input.dataReserva}T${input.horaFim}:00`,
+                data: `${formatDate(input.dataReserva)} das ${input.horaInicio} às ${input.horaFim}`,
+                dataOrdenacao: new Date(newStart),
+                atualizadoEm: FieldValue.serverTimestamp()
+            };
+            transaction.update(reservationRef, data);
+            lockRefs.forEach((ref, index) => {
+                const lock = locks[index];
+                transaction.set(ref, {
+                    dataReserva: datesToLock[index],
+                    atualizadoEm: FieldValue.serverTimestamp(),
+                    revisao: (lock.exists ? Number(lock.data().revisao) || 0 : 0) + 1
+                });
+            });
+            transaction.create(notificationRef, {
+                tipo: 'reserva_alterada',
+                reservaId: reservationRef.id,
+                responsavel: reservation.usuario || decoded.name || decoded.email || 'Usuário',
+                ambiente: reservation.ambiente || environment.nome,
+                anterior: oldInterval,
+                novo: {
+                    dataReserva: input.dataReserva,
+                    horaInicio: input.horaInicio,
+                    horaFim: input.horaFim
+                },
+                lida: false,
+                criadoEm: FieldValue.serverTimestamp()
+            });
+        });
+        return { ok: true };
+    }
+
+    async function cancelUserReservation(id, idToken) {
+        const decoded = await auth.verifyIdToken(idToken, true);
+        assertGoogleUser(decoded);
+        const reservationRef = reservations.doc(documentId(id));
+        const notificationRef = adminNotifications.doc();
+        await db.runTransaction(async (transaction) => {
+            const snapshot = await transaction.get(reservationRef);
+            if (!snapshot.exists || snapshot.data().usuarioUid !== decoded.uid) {
+                throw new StoreError(404, 'Reserva não encontrada.');
+            }
+            const reservation = snapshot.data();
+            const interval = intervalForReservation(reservation);
+            if (reservationStatus(reservation) !== 'ativa' || !interval ||
+                institutionalTime(interval.date, interval.start) <= Date.now()) {
+                throw new StoreError(409, 'Somente reservas futuras e ativas podem ser canceladas.');
+            }
+            transaction.update(reservationRef, {
+                status: 'cancelada',
+                canceladoEm: FieldValue.serverTimestamp()
+            });
+            transaction.create(notificationRef, {
+                tipo: 'reserva_cancelada',
+                reservaId: reservationRef.id,
+                responsavel: reservation.usuario || decoded.name || decoded.email || 'Usuário',
+                ambiente: reservation.ambiente || '',
+                anterior: interval,
+                novo: null,
+                lida: false,
+                criadoEm: FieldValue.serverTimestamp()
+            });
+        });
+        return { ok: true };
+    }
+
+    async function listAdminNotifications() {
+        const snapshot = await adminNotifications.get();
+        return snapshot.docs.map((doc) => {
+            const item = serialize(doc.data());
+            return {
+                id: doc.id,
+                tipo: item.tipo || '',
+                reservaId: item.reservaId || '',
+                responsavel: item.responsavel || 'Usuário',
+                ambiente: item.ambiente || '',
+                anterior: item.anterior || null,
+                novo: item.novo || null,
+                lida: item.lida === true,
+                criadoEm: item.criadoEm || null
+            };
+        }).sort((left, right) =>
+            new Date(right.criadoEm || 0).getTime() - new Date(left.criadoEm || 0).getTime()
+        ).slice(0, 50);
+    }
+
+    async function markAdminNotificationRead(id) {
+        const ref = adminNotifications.doc(documentId(id));
+        await db.runTransaction(async (transaction) => {
+            const snapshot = await transaction.get(ref);
+            if (!snapshot.exists) throw new StoreError(404, 'Notificação não encontrada.');
+            transaction.update(ref, {
+                lida: true,
+                lidaEm: FieldValue.serverTimestamp()
+            });
+        });
+        return { ok: true };
     }
 
     async function createReservation(input, idToken) {
@@ -554,16 +784,21 @@ function createAdminStore({ db, auth, FieldValue }) {
     }
 
     return {
+        cancelUserReservation,
         cancelReservation,
         createReservation,
         deleteEnvironment,
         deleteReservation,
         getDashboard,
+        listAdminNotifications,
         listReservationAvailability,
         listReservations,
+        listUserReservations,
         listPublicEnvironments,
         listEnvironments,
-        saveEnvironment
+        markAdminNotificationRead,
+        saveEnvironment,
+        updateUserReservation
     };
 }
 

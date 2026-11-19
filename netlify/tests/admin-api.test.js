@@ -91,3 +91,41 @@ test('retorna a lista completa somente após validar a sessão administrativa', 
         { id: 'reservation-1', usuario: 'Ana', usuarioEmail: 'ana@example.com' }
     ]);
 });
+
+test('somente a sessão administrativa pode ler notificações e marcá-las como lidas', async () => {
+    const calls = [];
+    const handler = createHandler(
+        () => ({
+            db: {},
+            store: {
+                async listAdminNotifications() {
+                    calls.push('list');
+                    return [{ id: 'notification-1', lida: false }];
+                },
+                async markAdminNotificationRead(id) {
+                    calls.push(`read:${id}`);
+                }
+            }
+        }),
+        async () => ({ uid: 'uid-admin' })
+    );
+    const deniedHandler = createHandler(
+        () => ({
+            db: {},
+            store: {
+                async listAdminNotifications() {
+                    throw new Error('Não deve executar sem sessão administrativa.');
+                }
+            }
+        }),
+        async () => null
+    );
+
+    assert.equal((await deniedHandler(request('listAdminNotifications'))).statusCode, 401);
+    const listResponse = await handler(request('listAdminNotifications'));
+    assert.deepEqual(JSON.parse(listResponse.body), [{ id: 'notification-1', lida: false }]);
+    assert.equal((await handler(request('markAdminNotificationRead', {
+        id: 'notification-1'
+    }))).statusCode, 200);
+    assert.deepEqual(calls, ['list', 'read:notification-1']);
+});

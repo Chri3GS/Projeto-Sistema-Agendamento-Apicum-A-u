@@ -132,7 +132,8 @@ function sendStoreError(response, error) {
         return;
     }
     if (error.code === 'auth/argument-error' || error.code === 'auth/id-token-expired' ||
-        error.code === 'auth/invalid-id-token' || error.code === 'auth/id-token-revoked') {
+        error.code === 'auth/invalid-id-token' || error.code === 'auth/id-token-revoked' ||
+        error.code === 'auth/user-disabled' || error.code === 'auth/user-not-found') {
         sendJson(response, 401, { error: 'Sessão Google inválida ou expirada.' });
         return;
     }
@@ -281,6 +282,40 @@ function createAdminServer({
             }
         }
 
+        if (pathname === '/api/user/reservas' && request.method === 'POST') {
+            if (!firebaseStore) {
+                return sendJson(response, 503, {
+                    error: 'O gerenciamento seguro de reservas exige credenciais Firebase Admin no servidor.'
+                });
+            }
+            const authorization = request.headers.authorization || '';
+            const token = authorization.match(/^Bearer (.+)$/i)?.[1];
+            if (!token) return sendJson(response, 401, { error: 'Entre com sua conta Google para continuar.' });
+            if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Origem da requisição inválida.' });
+            if (!/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
+                return sendJson(response, 415, { error: 'Esta operação exige conteúdo JSON.' });
+            }
+            try {
+                const data = await readJson(request);
+                switch (data.action) {
+                    case 'list':
+                        return sendJson(response, 200, await firebaseStore.listUserReservations(token));
+                    case 'update':
+                        return sendJson(response, 200, await firebaseStore.updateUserReservation(
+                            data.id,
+                            data.data,
+                            token
+                        ));
+                    case 'cancel':
+                        return sendJson(response, 200, await firebaseStore.cancelUserReservation(data.id, token));
+                    default:
+                        return sendJson(response, 404, { error: 'Operação de reserva não encontrada.' });
+                }
+            } catch (error) {
+                return sendStoreError(response, error);
+            }
+        }
+
         if (pathname === '/api/admin/session' && request.method === 'POST') {
             if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Origem da requisição inválida.' });
             if (!/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
@@ -394,6 +429,13 @@ function createAdminServer({
                 }
                 if (pathname === '/api/admin/reservas' && request.method === 'GET') {
                     return sendJson(response, 200, await firebaseStore.listReservations());
+                }
+                const notificationMatch = pathname.match(/^\/api\/admin\/notificacoes\/([^/]+)\/lida$/);
+                if (notificationMatch && request.method === 'PATCH') {
+                    await firebaseStore.markAdminNotificationRead(
+                        decodeURIComponent(notificationMatch[1])
+                    );
+                    return sendJson(response, 200, { ok: true });
                 }
                 if (pathname === '/api/admin/ambientes' && request.method === 'POST') {
                     const created = await firebaseStore.saveEnvironment(await readJson(request), null, actor);
