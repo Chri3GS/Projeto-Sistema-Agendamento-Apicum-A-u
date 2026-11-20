@@ -10,6 +10,7 @@ let limitesAgendamentos = {};
 let disponibilidadeCarregada = false;
 let usuarioLogado = null;
 let minhasReservas = [];
+let abaMinhasReservasAtiva = 'agendadas';
 let secaoPendenteAposLogin = window.sessionStorage.getItem('techagenda:pending-section');
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
@@ -86,6 +87,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const adminPanelAtLoad = isNetlifyAdminPanelRoute();
     atualizarInterfaceUsuario();
     configurarFiltrosLista();
+    configurarAbasMinhasReservas();
     configurarUploadImagemAmbiente();
     renderizarAmbientes();
     atualizarOpcoesAmbiente();
@@ -1090,25 +1092,96 @@ function mostrarStatusReservasUsuario(mensagem, erro = false) {
     status.className = `user-reservations-status${erro ? ' erro' : ''}`;
 }
 
-function reservaUsuarioEhFutura(reservation) {
+function reservaUsuarioEhFutura(reservation, agora = new Date()) {
     if (!reservation.dataReserva || !reservation.horaInicio) return false;
     const start = new Date(`${reservation.dataReserva}T${reservation.horaInicio}:00`);
-    return Number.isFinite(start.getTime()) && start > new Date();
+    return Number.isFinite(start.getTime()) && start > agora;
+}
+
+function categoriaReservaUsuario(reservation, agora = new Date()) {
+    if (reservation.situacao === 'cancelada') return 'canceladas';
+    if (reservation.situacao === 'concluida') return 'concluidas';
+    if (reservation.situacao === 'ativa' && reservaUsuarioEhFutura(reservation, agora)) {
+        return 'agendadas';
+    }
+    return null;
+}
+
+function configurarAbasMinhasReservas() {
+    const tabs = document.getElementById('user-reservations-tabs');
+    if (!tabs) return;
+
+    tabs.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-user-reservation-category]');
+        if (!button || !tabs.contains(button)) return;
+        selecionarAbaMinhasReservas(button.dataset.userReservationCategory);
+    });
+
+    tabs.addEventListener('keydown', (event) => {
+        const buttons = [...tabs.querySelectorAll('[data-user-reservation-category]')];
+        const currentIndex = buttons.indexOf(document.activeElement);
+        if (currentIndex < 0) return;
+
+        let nextIndex;
+        if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % buttons.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = buttons.length - 1;
+        else return;
+
+        event.preventDefault();
+        selecionarAbaMinhasReservas(buttons[nextIndex].dataset.userReservationCategory, true);
+    });
+}
+
+function selecionarAbaMinhasReservas(category, focar = false) {
+    const tabs = document.getElementById('user-reservations-tabs');
+    const selectedTab = tabs?.querySelector(`[data-user-reservation-category="${category}"]`);
+    if (!selectedTab) return;
+    abaMinhasReservasAtiva = category;
+
+    tabs.querySelectorAll('[data-user-reservation-category]').forEach((button) => {
+        const selected = button === selectedTab;
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-selected', String(selected));
+        button.tabIndex = selected ? 0 : -1;
+    });
+    document.getElementById('user-reservations-list')?.setAttribute('aria-labelledby', selectedTab.id);
+    if (focar) selectedTab.focus();
+    renderizarMinhasReservas();
 }
 
 function renderizarMinhasReservas() {
     const list = document.getElementById('user-reservations-list');
     if (!list) return;
     list.replaceChildren();
-    if (!minhasReservas.length) {
+    const counts = { agendadas: 0, canceladas: 0, concluidas: 0 };
+    const categorias = new Map();
+    const agora = new Date();
+    minhasReservas.forEach((reservation) => {
+        const category = categoriaReservaUsuario(reservation, agora);
+        if (category) {
+            counts[category] += 1;
+            categorias.set(reservation, category);
+        }
+    });
+    Object.entries(counts).forEach(([category, count]) => {
+        const countElement = document.getElementById(`user-reservations-count-${category}`);
+        if (countElement) countElement.textContent = String(count);
+    });
+
+    const reservations = minhasReservas.filter((reservation) =>
+        categorias.get(reservation) === abaMinhasReservasAtiva
+    );
+    if (!reservations.length) {
         const empty = document.createElement('p');
         empty.className = 'user-reservations-empty';
-        empty.textContent = 'Não há reservas vinculadas a esta conta. Reservas antigas sem UID não podem ser identificadas automaticamente.';
+        empty.textContent = 'Você não possui reservas nesta categoria.';
         list.appendChild(empty);
         return;
     }
 
-    minhasReservas.forEach((reservation) => {
+    reservations.forEach((reservation) => {
         const card = document.createElement('article');
         card.className = 'user-reservation-card';
         const heading = document.createElement('div');
@@ -1130,13 +1203,13 @@ function renderizarMinhasReservas() {
         reason.textContent = `Motivo: ${reservation.motivo || 'Agendamento de ambiente'}`;
         card.append(heading, date, reason);
 
-        if (reservation.situacao === 'ativa' && reservaUsuarioEhFutura(reservation)) {
+        if (abaMinhasReservasAtiva === 'agendadas' && reservaUsuarioEhFutura(reservation)) {
             const actions = document.createElement('div');
             actions.className = 'user-reservation-actions';
             const editButton = document.createElement('button');
             editButton.type = 'button';
             editButton.className = 'admin-action-button';
-            editButton.textContent = 'Alterar data/horário';
+            editButton.textContent = 'Alterar reserva';
             editButton.addEventListener('click', () => abrirEdicaoReservaUsuario(reservation.id));
             const cancelButton = document.createElement('button');
             cancelButton.type = 'button';

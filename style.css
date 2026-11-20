@@ -1677,6 +1677,57 @@ th { background: var(--primary-blue); color: white; }
     color: #b91c1c;
 }
 
+.user-reservations-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    overflow-x: auto;
+    border-bottom: 1px solid #dbe3ee;
+}
+
+.user-reservations-tab {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 10px 16px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: #475569;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.user-reservations-tab:hover,
+.user-reservations-tab:focus-visible {
+    color: var(--primary-blue);
+}
+
+.user-reservations-tab.active {
+    border-bottom-color: var(--primary-blue);
+    color: var(--primary-blue);
+}
+
+.user-reservations-tab-count {
+    display: inline-flex;
+    min-width: 22px;
+    height: 22px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #eaf0fb;
+    color: inherit;
+    font-size: 0.75rem;
+}
+
 .user-reservations-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
@@ -1784,6 +1835,18 @@ th { background: var(--primary-blue); color: white; }
 }
 
 @media (max-width: 768px) {
+    .user-reservations-tabs {
+        gap: 2px;
+        margin-right: -4px;
+        margin-left: -4px;
+    }
+
+    .user-reservations-tab {
+        padding-right: 11px;
+        padding-left: 11px;
+        font-size: 0.8rem;
+    }
+
     .admin-dashboard-header {
         align-items: flex-start;
         flex-direction: column;

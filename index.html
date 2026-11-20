@@ -256,8 +256,26 @@
                     </div>
                 </div>
             </header>
+            <div id="user-reservations-tabs" class="user-reservations-tabs" role="tablist" aria-label="Situação das reservas">
+                <button id="user-reservations-tab-agendadas" class="user-reservations-tab active" type="button"
+                    role="tab" aria-selected="true" aria-controls="user-reservations-list"
+                    data-user-reservation-category="agendadas">
+                    Agendadas <span id="user-reservations-count-agendadas" class="user-reservations-tab-count">0</span>
+                </button>
+                <button id="user-reservations-tab-canceladas" class="user-reservations-tab" type="button"
+                    role="tab" aria-selected="false" aria-controls="user-reservations-list" tabindex="-1"
+                    data-user-reservation-category="canceladas">
+                    Canceladas <span id="user-reservations-count-canceladas" class="user-reservations-tab-count">0</span>
+                </button>
+                <button id="user-reservations-tab-concluidas" class="user-reservations-tab" type="button"
+                    role="tab" aria-selected="false" aria-controls="user-reservations-list" tabindex="-1"
+                    data-user-reservation-category="concluidas">
+                    Concluídas <span id="user-reservations-count-concluidas" class="user-reservations-tab-count">0</span>
+                </button>
+            </div>
             <p id="user-reservations-status" class="user-reservations-status" role="status" aria-live="polite"></p>
-            <div id="user-reservations-list" class="user-reservations-list"></div>
+            <div id="user-reservations-list" class="user-reservations-list" role="tabpanel"
+                aria-labelledby="user-reservations-tab-agendadas" tabindex="0"></div>
         </section>
 
         <section id="lista" class="view" style="display:none;">
