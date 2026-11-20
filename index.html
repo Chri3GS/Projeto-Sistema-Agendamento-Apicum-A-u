@@ -82,8 +82,8 @@
                         
                         <div class="form-group">
                             <label for="data-reserva">Data da Reserva</label>
-                            <input type="text" id="data-reserva" placeholder="DD/MM/AAAA" inputmode="numeric"
-                                maxlength="10" autocomplete="off" aria-haspopup="dialog" aria-expanded="false"
+                            <input type="text" id="data-reserva" placeholder="DD/MM/AAAA" inputmode="none"
+                                maxlength="10" autocomplete="off" readonly aria-haspopup="dialog" aria-expanded="false"
                                 aria-controls="reserva-date-picker" onchange="aoMudarData()">
                         </div>
 
@@ -96,14 +96,14 @@
                         <div class="form-row-horarios">
                             <div class="form-group">
                                 <label for="hora-inicio">Início (08:00 - 18:00)</label>
-                                <input type="text" id="hora-inicio" placeholder="HH:MM" inputmode="numeric"
-                                    maxlength="5" autocomplete="off" aria-haspopup="dialog" aria-expanded="false"
+                                <input type="text" id="hora-inicio" placeholder="HH:MM" inputmode="none"
+                                    maxlength="5" autocomplete="off" readonly aria-haspopup="dialog" aria-expanded="false"
                                     aria-controls="reserva-time-picker" onchange="aoMudarHorarioManual()">
                             </div>
                             <div class="form-group">
                                 <label for="hora-fim">Término (08:00 - 18:00)</label>
-                                <input type="text" id="hora-fim" placeholder="HH:MM" inputmode="numeric"
-                                    maxlength="5" autocomplete="off" aria-haspopup="dialog" aria-expanded="false"
+                                <input type="text" id="hora-fim" placeholder="HH:MM" inputmode="none"
+                                    maxlength="5" autocomplete="off" readonly aria-haspopup="dialog" aria-expanded="false"
                                     aria-controls="reserva-time-picker" onchange="aoMudarHorarioManual()">
                             </div>
                         </div>

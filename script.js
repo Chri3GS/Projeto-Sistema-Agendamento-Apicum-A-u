@@ -1534,7 +1534,7 @@ function configurarSeletoresReservaPersonalizados() {
         input.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && seletorReservaAberto) {
                 event.preventDefault();
-                fecharSeletorReserva(true);
+                fecharSeletorReserva();
             } else if (['Enter', 'ArrowDown'].includes(event.key)) {
                 event.preventDefault();
                 abrirSeletorReserva(input);
@@ -1546,12 +1546,12 @@ function configurarSeletoresReservaPersonalizados() {
         if (!seletorReservaAberto) return;
         if (event.target !== seletorReservaAberto.input &&
             !seletorReservaAberto.popup.contains(event.target)) {
-            fecharSeletorReserva(false);
+            fecharSeletorReserva();
         }
     });
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && seletorReservaAberto) {
-            fecharSeletorReserva(true);
+            fecharSeletorReserva();
         }
     });
     window.addEventListener('resize', posicionarSeletorReserva);
@@ -1560,10 +1560,10 @@ function configurarSeletoresReservaPersonalizados() {
 
 function abrirSeletorReserva(input) {
     if (seletorReservaAberto?.input === input) {
-        fecharSeletorReserva(false);
+        fecharSeletorReserva();
         return;
     }
-    fecharSeletorReserva(false);
+    fecharSeletorReserva();
     const isDate = input.id === 'data-reserva';
     const popup = isDate ? criarCalendarioReserva(input) : criarRelogioReserva(input);
     document.body.appendChild(popup);
@@ -1590,13 +1590,12 @@ function posicionarSeletorReserva() {
     popup.style.top = `${top}px`;
 }
 
-function fecharSeletorReserva(restaurarFoco) {
+function fecharSeletorReserva() {
     if (!seletorReservaAberto) return;
     const { input, popup } = seletorReservaAberto;
     input.setAttribute('aria-expanded', 'false');
     popup.remove();
     seletorReservaAberto = null;
-    if (restaurarFoco) input.focus();
 }
 
 function criarCalendarioReserva(input) {
@@ -1667,7 +1666,7 @@ function criarCalendarioReserva(input) {
                 () => {
                     input.value = formatarDataBR(value);
                     input.removeAttribute('aria-invalid');
-                    fecharSeletorReserva(true);
+                    fecharSeletorReserva();
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             );
@@ -1680,12 +1679,12 @@ function criarCalendarioReserva(input) {
         const footer = document.createElement('div');
         footer.className = 'custom-picker-footer';
         footer.appendChild(criarBotaoSeletor('Fechar', 'custom-picker-link', () =>
-            fecharSeletorReserva(true)
+            fecharSeletorReserva()
         ));
         footer.appendChild(criarBotaoSeletor('Hoje', 'custom-picker-link', () => {
             input.value = formatarDataBR(getHojeFormatado());
             input.removeAttribute('aria-invalid');
-            fecharSeletorReserva(true);
+            fecharSeletorReserva();
             input.dispatchEvent(new Event('change', { bubbles: true }));
         }));
         popup.append(header, grid, footer);
@@ -1727,7 +1726,7 @@ function criarRelogioReserva(input) {
     const header = document.createElement('div');
     header.className = 'custom-time-header';
     const selectedTime = document.createElement('strong');
-    const closeButton = criarBotaoSeletor('×', 'custom-picker-close', () => fecharSeletorReserva(true), 'Fechar');
+    const closeButton = criarBotaoSeletor('×', 'custom-picker-close', () => fecharSeletorReserva(), 'Fechar');
     header.append(selectedTime, closeButton);
 
     const columns = document.createElement('div');
@@ -1742,7 +1741,7 @@ function criarRelogioReserva(input) {
         if (!state.alterado) return;
         input.value = `${String(state.hora).padStart(2, '0')}:${String(state.minuto).padStart(2, '0')}`;
         input.removeAttribute('aria-invalid');
-        fecharSeletorReserva(true);
+        fecharSeletorReserva();
         input.dispatchEvent(new Event('change', { bubbles: true }));
     });
     apply.disabled = true;
