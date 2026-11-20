@@ -1567,6 +1567,9 @@ function abrirSeletorReserva(input) {
     const isDate = input.id === 'data-reserva';
     const popup = isDate ? criarCalendarioReserva(input) : criarRelogioReserva(input);
     document.body.appendChild(popup);
+    popup.querySelectorAll('.custom-time-wheel').forEach((wheel) => {
+        wheel.scrollTop = Number(wheel.dataset.selectedIndex) * Number(wheel.dataset.rowHeight);
+    });
     seletorReservaAberto = { input, popup };
     input.setAttribute('aria-expanded', 'true');
     posicionarSeletorReserva();
@@ -1708,7 +1711,19 @@ function criarRelogioReserva(input) {
     const limits = limitesHoraReserva(input);
     const fallbackMinute = input.id === 'hora-fim' ? 30 : 0;
     if (!valorAtual) state.minuto = fallbackMinute;
+    state.hora = Math.max(
+        Number(limits.min.slice(0, 2)),
+        Math.min(Number(limits.max.slice(0, 2)), state.hora)
+    );
+    state.minuto = limitarMinuto(state.minuto, state.hora);
 
+    const rowHeight = 44;
+    const hourValues = Array.from({ length: 24 }, (_, index) => index);
+    const minuteValues = [
+        59,
+        ...Array.from({ length: 60 }, (_, index) => index),
+        0
+    ];
     const header = document.createElement('div');
     header.className = 'custom-time-header';
     const selectedTime = document.createElement('strong');
@@ -1717,19 +1732,9 @@ function criarRelogioReserva(input) {
 
     const columns = document.createElement('div');
     columns.className = 'custom-time-columns';
-    const hourColumn = document.createElement('section');
-    const minuteColumn = document.createElement('section');
-    const hourTitle = document.createElement('h3');
-    const minuteTitle = document.createElement('h3');
-    hourTitle.textContent = 'Hora';
-    minuteTitle.textContent = 'Minuto';
-    const hours = document.createElement('div');
-    const minutes = document.createElement('div');
-    hours.className = 'custom-time-options hours';
-    minutes.className = 'custom-time-options minutes';
-    hourColumn.append(hourTitle, hours);
-    minuteColumn.append(minuteTitle, minutes);
-    columns.append(hourColumn, minuteColumn);
+    const hourWheel = criarRoda('hora', 'Horas', hourValues);
+    const minuteWheel = criarRoda('minuto', 'Minutos', minuteValues);
+    columns.append(hourWheel.column, minuteWheel.column);
 
     const footer = document.createElement('div');
     footer.className = 'custom-picker-footer';
@@ -1743,44 +1748,219 @@ function criarRelogioReserva(input) {
     apply.disabled = true;
     footer.appendChild(apply);
 
-    function refresh() {
+    function limitesMinuto(hour) {
+        let min = 0;
+        let max = 59;
+        if (input.id === 'hora-inicio' && hour === Number(limits.max.slice(0, 2))) {
+            max = Number(limits.max.slice(3, 5));
+        }
+        if (input.id === 'hora-fim' && hour === Number(limits.min.slice(0, 2))) {
+            min = Number(limits.min.slice(3, 5));
+        }
+        if (input.id === 'hora-fim' && hour === Number(limits.max.slice(0, 2))) {
+            max = Number(limits.max.slice(3, 5));
+        }
+        return { min, max };
+    }
+
+    function limitarMinuto(minute, hour = state.hora) {
+        const range = limitesMinuto(hour);
+        return Math.max(range.min, Math.min(range.max, minute));
+    }
+
+    function indiceRoda(kind, value) {
+        return kind === 'minuto' ? value + 1 : value;
+    }
+
+    function atualizarRoda(wheel, values, value, behavior = 'smooth') {
+        const index = indiceRoda(wheel.dataset.kind, value);
+        if (index >= 0) {
+            wheel.dataset.selectedIndex = String(index);
+            wheel.scrollTo({ top: index * rowHeight, behavior });
+        }
+    }
+
+    function atualizarVisual() {
         selectedTime.textContent = `${String(state.hora).padStart(2, '0')}:${String(state.minuto).padStart(2, '0')}`;
         apply.disabled = !state.alterado;
-        hours.querySelectorAll('button').forEach((button) => {
-            button.classList.toggle('selected', Number(button.dataset.value) === state.hora);
-            const candidate = `${String(Number(button.dataset.value)).padStart(2, '0')}:${String(state.minuto).padStart(2, '0')}`;
-            button.disabled = candidate < limits.min || candidate > limits.max;
+        const minHour = Number(limits.min.slice(0, 2));
+        const maxHour = Number(limits.max.slice(0, 2));
+        hourWheel.options.forEach((option, index) => {
+            const value = Number(option.dataset.value);
+            const selected = index === state.hora;
+            const disabled = value < minHour || value > maxHour;
+            option.classList.toggle('selected', selected);
+            option.classList.toggle('disabled', disabled);
+            option.setAttribute('aria-selected', String(selected));
+            option.setAttribute('aria-disabled', String(disabled));
         });
-        minutes.querySelectorAll('button').forEach((button) => {
-            button.classList.toggle('selected', Number(button.dataset.value) === state.minuto);
-            const candidate = `${String(state.hora).padStart(2, '0')}:${String(Number(button.dataset.value)).padStart(2, '0')}`;
-            button.disabled = candidate < limits.min || candidate > limits.max;
+        const minuteRange = limitesMinuto(state.hora);
+        minuteWheel.options.forEach((option, index) => {
+            const value = Number(option.dataset.value);
+            const selected = index === indiceRoda('minuto', state.minuto);
+            const disabled = value < minuteRange.min || value > minuteRange.max;
+            option.classList.toggle('selected', selected);
+            option.classList.toggle('disabled', disabled);
+            option.setAttribute('aria-selected', String(selected));
+            option.setAttribute('aria-disabled', String(disabled));
         });
     }
 
-    for (let hour = 0; hour < 24; hour += 1) {
-        const value = String(hour).padStart(2, '0');
-        const button = criarBotaoSeletor(value, 'custom-time-option', () => {
-            state.hora = hour;
-            state.alterado = true;
-            refresh();
-        });
-        button.dataset.value = String(hour);
-        hours.appendChild(button);
+    function selecionarValor(kind, value, explicit = false, sourceIndex = null) {
+        const previousHour = state.hora;
+        const previousMinute = state.minuto;
+        if (kind === 'hora') {
+            state.hora = Math.max(
+                Number(limits.min.slice(0, 2)),
+                Math.min(Number(limits.max.slice(0, 2)), value)
+            );
+            state.minuto = limitarMinuto(state.minuto);
+        } else {
+            state.minuto = limitarMinuto(value);
+        }
+        state.alterado = state.alterado || explicit ||
+            previousHour !== state.hora || previousMinute !== state.minuto;
+        atualizarVisual();
+        const isWrappedMinute = kind === 'minuto' &&
+            (sourceIndex === 0 || sourceIndex === minuteValues.length - 1);
+        atualizarRoda(
+            kind === 'hora' ? hourWheel.element : minuteWheel.element,
+            kind === 'hora' ? hourValues : minuteValues,
+            kind === 'hora' ? state.hora : state.minuto,
+            isWrappedMinute ? 'auto' : 'smooth'
+        );
+        if (previousMinute !== state.minuto) {
+            atualizarRoda(minuteWheel.element, minuteValues, state.minuto, 'auto');
+        }
+        if (previousHour !== state.hora) {
+            atualizarRoda(hourWheel.element, hourValues, state.hora);
+        }
     }
-    for (let minute = 0; minute < 60; minute += 1) {
-        const value = String(minute).padStart(2, '0');
-        const button = criarBotaoSeletor(value, 'custom-time-option', () => {
-            state.minuto = minute;
-            state.alterado = true;
-            refresh();
+
+    function criarRoda(kind, label, values) {
+        const column = document.createElement('section');
+        column.className = 'custom-time-column';
+        const heading = document.createElement('h3');
+        heading.textContent = label;
+        const shell = document.createElement('div');
+        shell.className = 'custom-time-wheel-shell';
+        const wheel = document.createElement('div');
+        wheel.className = 'custom-time-wheel';
+        wheel.tabIndex = 0;
+        wheel.setAttribute('role', 'listbox');
+        wheel.setAttribute('aria-label', label);
+        wheel.dataset.kind = kind;
+        wheel.dataset.rowHeight = String(rowHeight);
+
+        const spacerTop = document.createElement('span');
+        spacerTop.className = 'custom-time-wheel-spacer';
+        spacerTop.setAttribute('aria-hidden', 'true');
+        wheel.appendChild(spacerTop);
+        const options = values.map((value, index) => {
+            const option = document.createElement('div');
+            option.className = 'custom-time-wheel-option';
+            option.textContent = String(value).padStart(2, '0');
+            option.dataset.value = String(value);
+            option.dataset.index = String(index);
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-posinset', String(index + 1));
+            option.setAttribute('aria-setsize', String(values.length));
+            option.addEventListener('click', () => selecionarValor(kind, value, true, index));
+            wheel.appendChild(option);
+            return option;
         });
-        button.dataset.value = String(minute);
-        minutes.appendChild(button);
+        const spacerBottom = document.createElement('span');
+        spacerBottom.className = 'custom-time-wheel-spacer';
+        spacerBottom.setAttribute('aria-hidden', 'true');
+        wheel.appendChild(spacerBottom);
+
+        const selectionBand = document.createElement('span');
+        selectionBand.className = 'custom-time-wheel-selection';
+        selectionBand.setAttribute('aria-hidden', 'true');
+        shell.append(wheel, selectionBand);
+        column.append(heading, shell);
+
+        let settleTimer;
+        wheel.addEventListener('scroll', () => {
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(() => {
+                const index = Math.max(0, Math.min(
+                    values.length - 1,
+                    Math.round(wheel.scrollTop / rowHeight)
+                ));
+                selecionarValor(kind, values[index], false, index);
+            }, 120);
+        }, { passive: true });
+
+        wheel.addEventListener('keydown', (event) => {
+            if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const currentValue = kind === 'hora' ? state.hora : state.minuto;
+            let value;
+            let targetIndex;
+            if (event.key === 'Home') {
+                value = kind === 'hora' ? Number(limits.min.slice(0, 2)) : limitesMinuto(state.hora).min;
+                targetIndex = indiceRoda(kind, value);
+            } else if (event.key === 'End') {
+                value = kind === 'hora' ? Number(limits.max.slice(0, 2)) : limitesMinuto(state.hora).max;
+                targetIndex = indiceRoda(kind, value);
+            } else {
+                targetIndex = Math.max(0, Math.min(
+                    values.length - 1,
+                    indiceRoda(kind, currentValue) + (event.key === 'ArrowUp' ? -1 : 1)
+                ));
+                value = values[targetIndex];
+            }
+            if (kind === 'minuto') value = limitarMinuto(value);
+            selecionarValor(kind, value, true, targetIndex);
+        });
+
+        let dragStart = null;
+        let dragMoved = false;
+        const movePointer = (event) => {
+            if (!dragStart) return;
+            if (!dragMoved && Math.abs(event.clientY - dragStart.y) > 3) {
+                dragMoved = true;
+                wheel.classList.add('dragging');
+            }
+            if (dragMoved) {
+                wheel.scrollTop = dragStart.scrollTop - (event.clientY - dragStart.y);
+                event.preventDefault();
+            }
+        };
+        const endPointer = (event) => {
+            if (!dragStart) return;
+            const wasMoved = dragMoved;
+            dragStart = null;
+            dragMoved = false;
+            wheel.classList.remove('dragging');
+            if (wheel.hasPointerCapture(event.pointerId)) {
+                wheel.releasePointerCapture(event.pointerId);
+            }
+            if (!wasMoved && event.type === 'pointerup') {
+                const option = document.elementFromPoint(event.clientX, event.clientY)
+                    ?.closest('.custom-time-wheel-option');
+                if (option && wheel.contains(option) && !option.classList.contains('disabled')) {
+                    selecionarValor(kind, Number(option.dataset.value), true, Number(option.dataset.index));
+                }
+            }
+        };
+        wheel.addEventListener('pointerdown', (event) => {
+            if (event.pointerType !== 'mouse' || event.button !== 0) return;
+            dragStart = { y: event.clientY, scrollTop: wheel.scrollTop };
+            wheel.setPointerCapture(event.pointerId);
+        });
+        wheel.addEventListener('pointermove', movePointer);
+        wheel.addEventListener('pointerup', endPointer);
+        wheel.addEventListener('pointercancel', endPointer);
+
+        const selectedValue = kind === 'hora' ? state.hora : state.minuto;
+        wheel.dataset.selectedIndex = String(indiceRoda(kind, selectedValue));
+        return { column, element: wheel, options };
     }
 
     popup.append(header, columns, footer);
-    refresh();
+    atualizarVisual();
     return popup;
 }
 

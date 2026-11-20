@@ -477,63 +477,95 @@ button {
 
 .custom-time-columns {
     display: grid;
-    grid-template-columns: 0.8fr 1.2fr;
-    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
 }
 
 .custom-time-columns h3 {
-    margin: 0 0 8px;
+    margin: 0 0 7px;
     color: #64748b;
     font-size: 0.78rem;
     font-weight: 700;
     text-transform: uppercase;
 }
 
-.custom-time-options {
-    display: grid;
-    max-height: 188px;
-    grid-auto-rows: 36px;
-    gap: 4px;
+.custom-time-wheel-shell {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.custom-time-wheel {
+    position: relative;
+    z-index: 1;
+    height: 132px;
     overflow: auto;
-    padding: 2px;
+    scroll-snap-type: y mandatory;
     overscroll-behavior: contain;
+    scrollbar-width: none;
+    touch-action: pan-y;
+    cursor: grab;
+    user-select: none;
+    -webkit-overflow-scrolling: touch;
 }
 
-.custom-time-options.hours {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.custom-time-wheel::-webkit-scrollbar {
+    display: none;
 }
 
-.custom-time-options.minutes {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+.custom-time-wheel.dragging {
+    cursor: grabbing;
+    scroll-snap-type: none;
 }
 
-.custom-time-option {
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #f8fafc;
+.custom-time-wheel-spacer,
+.custom-time-wheel-option {
+    display: flex;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+}
+
+.custom-time-wheel-spacer {
+    pointer-events: none;
+}
+
+.custom-time-wheel-option {
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
     color: #334155;
     cursor: pointer;
-    font: inherit;
-    font-size: 0.84rem;
     font-variant-numeric: tabular-nums;
+    font-size: 1rem;
+    opacity: 0.38;
+    transition: color 0.16s ease, opacity 0.16s ease, font-size 0.16s ease;
 }
 
-.custom-time-option:hover {
-    border-color: #a9bde9;
-    background: #edf3ff;
+.custom-time-wheel-option.selected {
     color: var(--primary-blue);
-}
-
-.custom-time-option.selected {
-    border-color: var(--primary-blue);
-    background: var(--primary-blue);
-    color: #fff;
+    font-size: 1.35rem;
     font-weight: 700;
+    opacity: 1;
 }
 
-.custom-time-option:disabled {
+.custom-time-wheel-option.disabled {
     cursor: not-allowed;
-    opacity: 0.4;
+    opacity: 0.16;
+    pointer-events: none;
+}
+
+.custom-time-wheel-selection {
+    position: absolute;
+    z-index: 0;
+    top: 44px;
+    right: 0;
+    left: 0;
+    height: 44px;
+    border-top: 1px solid #d5e1f8;
+    border-bottom: 1px solid #d5e1f8;
+    border-radius: 8px;
+    background: #f0f5ff;
+    pointer-events: none;
 }
 
 .custom-reservation-picker button:focus-visible {
