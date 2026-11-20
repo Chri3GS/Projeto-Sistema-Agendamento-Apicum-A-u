@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <base href="/">
     <meta name="techagenda-backend" content="netlify">
     <title>Agenda CT APC</title>
@@ -22,7 +22,7 @@
         </div>
     </div>
 
-    <nav class="sidebar" id="sidebar">
+    <nav class="sidebar" id="sidebar" aria-label="Navegação principal">
     <div class="menu-toggle" onclick="toggleMenu()">
         <span></span>
         <span></span>
@@ -404,6 +404,36 @@
         </div>
     </section>
     </main>
+
+    <nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Navegação principal móvel">
+        <button class="mobile-nav-item active" type="button" data-mobile-section="home" aria-current="page"
+            onclick="showSection('home')">
+            <img src="imagens/icone home.png" alt="" aria-hidden="true">
+            <span>Ambientes</span>
+        </button>
+        <button class="mobile-nav-item" type="button" data-mobile-section="reserva" onclick="showSection('reserva')">
+            <img src="imagens/icone reserva.png" alt="" aria-hidden="true">
+            <span>Reserva</span>
+        </button>
+        <button class="mobile-nav-item" type="button" data-mobile-section="minhas-reservas"
+            onclick="showSection('minhas-reservas')">
+            <img src="imagens/icone lista.png" alt="" aria-hidden="true">
+            <span>Minhas Reservas</span>
+        </button>
+        <button class="mobile-nav-item" type="button" data-mobile-section="falarComCt" onclick="showSection('falarComCt')">
+            <img src="imagens/icone falar com CT.png" alt="" aria-hidden="true">
+            <span>Falar com o CT</span>
+        </button>
+        <button id="mobile-nav-admin" class="mobile-nav-item mobile-nav-admin" type="button" hidden
+            aria-controls="mobile-admin-menu" aria-expanded="false" onclick="toggleMobileAdminMenu()">
+            <img src="imagens/icone login.png" alt="" aria-hidden="true">
+            <span>Admin</span>
+        </button>
+        <div id="mobile-admin-menu" class="mobile-admin-menu" aria-label="Opções administrativas" hidden>
+            <button type="button" onclick="navegarParaSecaoAdmin('lista')">Lista geral</button>
+            <button type="button" onclick="navegarParaSecaoAdmin('administracao')">Administração</button>
+        </div>
+    </nav>
 
     <div id="modalInformacao" class="modal">
     <div class="modal-content">

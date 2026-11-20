@@ -232,6 +232,7 @@ let ambientesCadastrados = Object.entries(dadosSalas).map(([nome, sala]) => ({
 
 window.addEventListener('DOMContentLoaded', () => {
     configurarDialogoTechAgenda();
+    configurarNavegacaoMobile();
     configurarContatoCT();
     const adminPanelAtLoad = isNetlifyAdminPanelRoute();
     atualizarInterfaceUsuario();
@@ -443,6 +444,9 @@ function atualizarVisibilidadeMenuAdmin(visible) {
     if (menuAdmin) menuAdmin.hidden = !visible;
     const menuLista = document.getElementById('menu-lista');
     if (menuLista) menuLista.hidden = !visible;
+    const mobileAdminButton = document.getElementById('mobile-nav-admin');
+    if (mobileAdminButton) mobileAdminButton.hidden = !visible;
+    if (!visible) fecharMenuAdminMobile();
     const listButton = document.getElementById('btn-confirmacao-lista');
     if (listButton) listButton.hidden = !visible;
 }
@@ -1538,6 +1542,8 @@ function showSection(sectionId, element) {
         return;
     }
 
+    fecharMenuAdminMobile();
+
     // 1. Esconde todas as seções
     document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
     
@@ -1547,20 +1553,35 @@ function showSection(sectionId, element) {
         secaoAlvo.style.display = 'block';
     }
 
-    // 3. Gerencia a classe 'active' nos botões do menu lateral
-    document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
-    if (element) {
-        element.classList.add('active');
-    } else {
-        const menuIds = {
-            home: 'menu-ambientes',
-            reserva: 'menu-reserva',
-            'minhas-reservas': 'menu-minhas-reservas',
-            lista: 'menu-lista',
-            falarComCt: 'menu-falar',
-            administracao: 'menu-admin'
-        };
-        document.getElementById(menuIds[sectionId])?.classList.add('active');
+    // Sincroniza a navegação lateral e a barra inferior sem duplicar o fluxo de seções.
+    const menuIds = {
+        home: 'menu-ambientes',
+        reserva: 'menu-reserva',
+        'minhas-reservas': 'menu-minhas-reservas',
+        lista: 'menu-lista',
+        falarComCt: 'menu-falar',
+        administracao: 'menu-admin'
+    };
+    document.querySelectorAll('.nav-links li, .mobile-bottom-nav [data-mobile-section]')
+        .forEach((item) => {
+            item.classList.remove('active');
+            item.removeAttribute('aria-current');
+        });
+    if (element?.matches('.nav-links li')) element.classList.add('active');
+    document.getElementById(menuIds[sectionId])?.classList.add('active');
+    const mobileSectionButton = [...document.querySelectorAll('[data-mobile-section]')]
+        .find((button) => button.dataset.mobileSection === sectionId);
+    if (mobileSectionButton) {
+        mobileSectionButton.classList.add('active');
+        mobileSectionButton.setAttribute('aria-current', 'page');
+    }
+    const mobileAdminButton = document.getElementById('mobile-nav-admin');
+    if (mobileAdminButton && ['lista', 'administracao'].includes(sectionId)) {
+        mobileAdminButton.classList.add('active');
+        mobileAdminButton.setAttribute('aria-current', 'page');
+    } else if (mobileAdminButton) {
+        mobileAdminButton.classList.remove('active');
+        mobileAdminButton.removeAttribute('aria-current');
     }
 
     // 4. Se for a tela de reserva, atualiza a grade de disponibilidade
@@ -1639,6 +1660,44 @@ function trocarFotoReserva() {
 function toggleMenu() {
     const sidebar = document.getElementById('sidebar');
     if (sidebar) sidebar.classList.toggle('active');
+}
+
+function configurarNavegacaoMobile() {
+    document.addEventListener('pointerdown', (event) => {
+        const menu = document.getElementById('mobile-admin-menu');
+        const button = document.getElementById('mobile-nav-admin');
+        if (!menu || menu.hidden || menu.contains(event.target) || button?.contains(event.target)) return;
+        fecharMenuAdminMobile();
+    });
+    document.addEventListener('keydown', (event) => {
+        const menu = document.getElementById('mobile-admin-menu');
+        if (event.key !== 'Escape' || !menu || menu.hidden) return;
+        fecharMenuAdminMobile();
+        document.getElementById('mobile-nav-admin')?.focus();
+    });
+}
+
+function toggleMobileAdminMenu() {
+    const button = document.getElementById('mobile-nav-admin');
+    const menu = document.getElementById('mobile-admin-menu');
+    if (!button || button.hidden || !menu) return;
+    menu.hidden = !menu.hidden;
+    button.setAttribute('aria-expanded', String(!menu.hidden));
+    if (!menu.hidden) menu.querySelector('button')?.focus();
+}
+
+function fecharMenuAdminMobile() {
+    const menu = document.getElementById('mobile-admin-menu');
+    const button = document.getElementById('mobile-nav-admin');
+    if (menu) menu.hidden = true;
+    button?.setAttribute('aria-expanded', 'false');
+}
+
+function navegarParaSecaoAdmin(sectionId) {
+    if (!temAcessoAdministrativo()) return;
+    fecharMenuAdminMobile();
+    showSection(sectionId);
+    document.getElementById('mobile-nav-admin')?.focus({ preventScroll: true });
 }
 
 // ==========================================
