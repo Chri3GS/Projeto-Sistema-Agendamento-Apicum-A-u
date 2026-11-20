@@ -983,6 +983,56 @@ button {
     font-weight: 600;
 }
 
+.modal-dialogo-techagenda {
+    z-index: 2100;
+}
+
+.dialogo-techagenda-content {
+    max-height: calc(100vh - 32px);
+}
+
+.dialogo-techagenda-body {
+    overflow-y: auto;
+}
+
+.dialogo-techagenda-content .close-modal {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+}
+
+.modal-dialogo-techagenda [hidden] {
+    display: none !important;
+}
+
+.dialogo-techagenda-icon.is-error {
+    background-color: #ef4444;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+
+.dialogo-techagenda-icon.is-warning {
+    background-color: #f59e0b;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+
+.dialogo-techagenda-icon.is-info {
+    background-color: #3b82f6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+@supports (height: 100dvh) {
+    .dialogo-techagenda-content {
+        max-height: calc(100dvh - 32px);
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-dialogo-techagenda .modal-footer-botoes {
+        flex-direction: column;
+    }
+}
+
 /* ==========================================
    BOTÃO DE FECHAR DO MODAL (X)
    ========================================== */

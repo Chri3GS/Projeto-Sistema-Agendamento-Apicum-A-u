@@ -12,6 +12,8 @@ let usuarioLogado = null;
 let minhasReservas = [];
 let abaMinhasReservasAtiva = 'agendadas';
 let seletorReservaAberto = null;
+let dialogoTechAgendaAtivo = null;
+let focoAnteriorModalLogin = null;
 let secaoPendenteAposLogin = window.sessionStorage.getItem('techagenda:pending-section');
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
@@ -30,6 +32,150 @@ const CONFIG_CT = {
     intervaloMinutos: 60, // Granularidade dos slots da grade
     limiteAntecedenciaDias: 60
 };
+
+const CONFIG_CONTATO_CT = {
+    whatsappNumero: '5598984349975'
+};
+
+function configurarContatoCT() {
+    const link = document.getElementById('link-whatsapp-ct');
+    if (!link) return;
+    link.href = `https://wa.me/${CONFIG_CONTATO_CT.whatsappNumero}`;
+}
+
+function configurarDialogoTechAgenda() {
+    const modal = document.getElementById('modalDialogoTechAgenda');
+    if (!modal) return;
+
+    document.getElementById('dialogo-techagenda-fechar')
+        ?.addEventListener('click', () => fecharDialogoTechAgenda(false));
+    document.getElementById('dialogo-techagenda-cancelar')
+        ?.addEventListener('click', () => fecharDialogoTechAgenda(false));
+    document.getElementById('dialogo-techagenda-confirmar')
+        ?.addEventListener('click', () => fecharDialogoTechAgenda(true));
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal && dialogoTechAgendaAtivo?.cancelavel) {
+            fecharDialogoTechAgenda(false);
+        }
+    });
+    document.addEventListener('keydown', lidarComTecladoDialogoTechAgenda);
+}
+
+function mostrarDialogoTechAgenda({
+    tipo = 'informacao',
+    titulo,
+    mensagem,
+    detalhes = [],
+    cancelavel = false,
+    textoCancelar = 'Voltar',
+    textoConfirmar = 'OK'
+}) {
+    const modal = document.getElementById('modalDialogoTechAgenda');
+    if (!modal) {
+        console.error('O diálogo personalizado do TechAgenda não está disponível.');
+        return Promise.resolve(false);
+    }
+
+    if (dialogoTechAgendaAtivo) fecharDialogoTechAgenda(false);
+
+    const cabecalho = document.getElementById('dialogo-techagenda-cabecalho');
+    const icone = document.getElementById('dialogo-techagenda-icone');
+    const tituloElemento = document.getElementById('dialogo-techagenda-titulo');
+    const mensagemElemento = document.getElementById('dialogo-techagenda-mensagem');
+    const detalhesElemento = document.getElementById('dialogo-techagenda-detalhes');
+    const fechar = document.getElementById('dialogo-techagenda-fechar');
+    const cancelar = document.getElementById('dialogo-techagenda-cancelar');
+    const confirmar = document.getElementById('dialogo-techagenda-confirmar');
+    const aparencias = {
+        sucesso: { icone: '✓', classe: 'is-success' },
+        erro: { icone: '!', classe: 'is-error' },
+        aviso: { icone: '!', classe: 'is-warning' },
+        informacao: { icone: 'i', classe: 'is-info' }
+    };
+    const aparencia = aparencias[tipo] || aparencias.informacao;
+
+    tituloElemento.textContent = titulo;
+    mensagemElemento.textContent = mensagem;
+    icone.textContent = aparencia.icone;
+    icone.className = `icone-sucesso-circulo dialogo-techagenda-icon ${aparencia.classe}`;
+    cabecalho.className = 'modal-header modal-header-sucesso';
+    fechar.setAttribute('aria-label', 'Fechar diálogo');
+    cancelar.textContent = textoCancelar;
+    cancelar.hidden = !cancelavel;
+    confirmar.textContent = cancelavel ? textoConfirmar : 'OK';
+    detalhesElemento.replaceChildren();
+    (Array.isArray(detalhes) ? detalhes : []).forEach(([rotulo, valor]) => {
+        const item = document.createElement('div');
+        item.className = 'resumo-item';
+        const label = document.createElement('span');
+        label.textContent = rotulo;
+        const value = document.createElement('strong');
+        value.textContent = valor || '';
+        item.append(label, value);
+        detalhesElemento.appendChild(item);
+    });
+    detalhesElemento.hidden = !detalhesElemento.childElementCount;
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+
+    return new Promise((resolve) => {
+        dialogoTechAgendaAtivo = {
+            modal,
+            cancelavel,
+            resolver: resolve,
+            focoAnterior: document.activeElement
+        };
+        (cancelavel ? cancelar : confirmar).focus();
+    });
+}
+
+function fecharDialogoTechAgenda(resultado) {
+    if (!dialogoTechAgendaAtivo) return;
+    const dialogo = dialogoTechAgendaAtivo;
+    dialogoTechAgendaAtivo = null;
+    dialogo.modal.style.display = 'none';
+    dialogo.modal.setAttribute('aria-hidden', 'true');
+    if (dialogo.focoAnterior?.isConnected && dialogo.focoAnterior !== document.body) {
+        dialogo.focoAnterior.focus({ preventScroll: true });
+    }
+    dialogo.resolver(resultado);
+}
+
+function lidarComTecladoDialogoTechAgenda(event) {
+    if (!dialogoTechAgendaAtivo) return;
+    if (event.key === 'Escape' && dialogoTechAgendaAtivo.cancelavel) {
+        event.preventDefault();
+        fecharDialogoTechAgenda(false);
+        return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const botoes = [...dialogoTechAgendaAtivo.modal.querySelectorAll(
+        'button:not([hidden]):not(:disabled)'
+    )];
+    if (!botoes.length) return;
+    const primeiro = botoes[0];
+    const ultimo = botoes[botoes.length - 1];
+    if (event.shiftKey && document.activeElement === primeiro) {
+        event.preventDefault();
+        ultimo.focus();
+    } else if (!event.shiftKey && document.activeElement === ultimo) {
+        event.preventDefault();
+        primeiro.focus();
+    }
+}
+
+function detalhesReservaDialogo(reserva) {
+    const intervalo = extrairIntervaloReserva(reserva);
+    const data = reserva.dataReserva || intervalo?.dataStr;
+    const horaInicio = reserva.horaInicio || intervalo?.horaInicio;
+    const horaFim = reserva.horaFim || intervalo?.horaFim;
+    return [
+        ['Ambiente:', reserva.ambiente || 'Não informado'],
+        ['Data:', formatarDataBR(data) || reserva.data || 'Não informada'],
+        ['Horário:', horaInicio && horaFim ? `${horaInicio} às ${horaFim}` : 'Não informado']
+    ];
+}
 
 // Dados detalhados dos ambientes disponíveis
 const dadosSalas = {
@@ -85,6 +231,8 @@ let ambientesCadastrados = Object.entries(dadosSalas).map(([nome, sala]) => ({
 // ==========================================
 
 window.addEventListener('DOMContentLoaded', () => {
+    configurarDialogoTechAgenda();
+    configurarContatoCT();
     const adminPanelAtLoad = isNetlifyAdminPanelRoute();
     atualizarInterfaceUsuario();
     configurarFiltrosLista();
@@ -959,7 +1107,15 @@ async function salvarAmbienteAdmin(event) {
 }
 
 async function excluirAmbienteAdmin(id, nome) {
-    if (!confirm(`Excluir o ambiente "${nome}"? Esta ação não pode ser desfeita.`)) return;
+    const confirmado = await mostrarDialogoTechAgenda({
+        tipo: 'aviso',
+        titulo: 'Excluir ambiente?',
+        mensagem: `Excluir o ambiente "${nome}"? Esta ação não pode ser desfeita.`,
+        cancelavel: true,
+        textoCancelar: 'Voltar',
+        textoConfirmar: 'Excluir ambiente'
+    });
+    if (!confirmado) return;
     try {
         if (window.techAgendaNetlifyAdminSession) {
             await apiNetlifyAdmin('deleteEnvironment', { id });
@@ -1048,7 +1204,17 @@ function renderizarTabelaAdminReservas() {
 }
 
 async function cancelarReservaAdmin(id) {
-    if (!confirm('Cancelar esta reserva? O horário ficará disponível novamente.')) return;
+    const reserva = todasAsReservas.find((item) => item.id === id);
+    const confirmado = await mostrarDialogoTechAgenda({
+        tipo: 'aviso',
+        titulo: 'Cancelar reserva?',
+        mensagem: 'O horário ficará disponível novamente.',
+        detalhes: reserva ? detalhesReservaDialogo(reserva) : [],
+        cancelavel: true,
+        textoCancelar: 'Voltar',
+        textoConfirmar: 'Confirmar cancelamento'
+    });
+    if (!confirmado) return;
     try {
         if (window.techAgendaNetlifyAdminSession) {
             await apiNetlifyAdmin('cancelReservation', { id });
@@ -1066,7 +1232,17 @@ async function cancelarReservaAdmin(id) {
 }
 
 async function excluirReservaAdmin(id) {
-    if (!confirm('Excluir permanentemente este registro de reserva?')) return;
+    const reserva = todasAsReservas.find((item) => item.id === id);
+    const confirmado = await mostrarDialogoTechAgenda({
+        tipo: 'aviso',
+        titulo: 'Excluir reserva?',
+        mensagem: 'Excluir permanentemente este registro de reserva? Esta ação não pode ser desfeita.',
+        detalhes: reserva ? detalhesReservaDialogo(reserva) : [],
+        cancelavel: true,
+        textoCancelar: 'Voltar',
+        textoConfirmar: 'Excluir reserva'
+    });
+    if (!confirmado) return;
     try {
         if (window.techAgendaNetlifyAdminSession) {
             await apiNetlifyAdmin('deleteReservation', { id });
@@ -1323,9 +1499,16 @@ async function salvarEdicaoReservaUsuario(event) {
 }
 
 async function cancelarReservaUsuario(reservation) {
-    if (!window.confirm(`Deseja cancelar sua reserva em ${reservation.ambiente} no dia ${formatarDataBR(reservation.dataReserva)}?`)) {
-        return;
-    }
+    const confirmado = await mostrarDialogoTechAgenda({
+        tipo: 'aviso',
+        titulo: 'Cancelar reserva?',
+        mensagem: 'Deseja cancelar esta reserva?',
+        detalhes: detalhesReservaDialogo(reservation),
+        cancelavel: true,
+        textoCancelar: 'Voltar',
+        textoConfirmar: 'Confirmar cancelamento'
+    });
+    if (!confirmado) return;
     try {
         await apiReservasUsuario('cancel', { id: reservation.id });
         await carregarMinhasReservas();
@@ -1406,7 +1589,11 @@ function showSection(sectionId, element) {
 function abrirReserva(nomeAmbiente) {
     const ambiente = ambientesCadastrados.find((item) => item.nome === nomeAmbiente);
     if (!ambiente || !ambiente.ativo) {
-        alert("Este ambiente está temporariamente indisponível.");
+        mostrarDialogoTechAgenda({
+            tipo: 'aviso',
+            titulo: 'Ambiente indisponível',
+            mensagem: 'Este ambiente está temporariamente indisponível.'
+        });
         return;
     }
     const selectAmbiente = document.getElementById('select-ambiente');
@@ -2430,12 +2617,18 @@ async function salvarReserva() {
     // 1. Verificação de autenticação
     const firebaseUser = window.firebaseAuth && window.firebaseAuth.currentUser;
     if (!firebaseUser || !usuarioLogado || usuarioLogado.uid !== firebaseUser.uid) {
-        if (window.techAgendaAdminSession) {
-            alert("A sessão administrativa permite navegar pelo site. Para confirmar uma reserva, entre com uma conta Google.");
-            return;
-        }
-        alert("Você precisa entrar no sistema antes de realizar um agendamento!");
-        abrirModalLogin();
+        const mensagem = window.techAgendaAdminSession
+            ? 'A sessão administrativa permite navegar pelo site. Para confirmar uma reserva, entre com uma conta Google.'
+            : 'Entre com sua conta Google para confirmar uma reserva.';
+        const abrirLogin = await mostrarDialogoTechAgenda({
+            tipo: 'aviso',
+            titulo: 'Login necessário',
+            mensagem,
+            cancelavel: true,
+            textoCancelar: 'Agora não',
+            textoConfirmar: 'Entrar com Google'
+        });
+        if (abrirLogin) abrirModalLogin();
         return;
     }
 
@@ -2842,7 +3035,11 @@ function abrirModalConfirmacao(reserva) {
     const detalhes = document.getElementById('resumo-reserva-detalhes');
 
     if (!modal || !detalhes) {
-        alert(`Agendamento de ${reserva.ambiente} realizado com sucesso!`);
+        mostrarDialogoTechAgenda({
+            tipo: 'sucesso',
+            titulo: 'Agendamento Realizado!',
+            mensagem: `Agendamento de ${reserva.ambiente} realizado com sucesso.`
+        });
         return;
     }
 
@@ -2884,20 +3081,26 @@ function irParaListaReservas() {
 
 function abrirModalLogin() {
     if (usuarioLogado) {
-        if (confirm("Deseja encerrar sua sessão atual?")) {
-            sairDaConta();
-        }
+        sairDaConta();
         return;
     }
 
     limparErroAutenticacao();
     const modalLogin = document.getElementById('modalLogin');
-    if (modalLogin) modalLogin.style.display = 'flex';
+    if (!modalLogin || modalLogin.style.display === 'flex') return;
+    focoAnteriorModalLogin = document.activeElement;
+    modalLogin.style.display = 'flex';
+    document.getElementById('btn-login-google')?.focus();
 }
 
 function fecharModalLogin() {
     const modalLogin = document.getElementById('modalLogin');
-    if (modalLogin) modalLogin.style.display = 'none';
+    if (!modalLogin) return;
+    modalLogin.style.display = 'none';
+    if (focoAnteriorModalLogin?.isConnected && focoAnteriorModalLogin !== document.body) {
+        focoAnteriorModalLogin.focus({ preventScroll: true });
+    }
+    focoAnteriorModalLogin = null;
 }
 
 function mostrarErroAutenticacao(mensagem) {
@@ -2982,6 +3185,16 @@ async function realizarLoginGoogle() {
 }
 
 async function sairDaConta() {
+    const confirmado = await mostrarDialogoTechAgenda({
+        tipo: 'informacao',
+        titulo: 'Encerrar sessão?',
+        mensagem: 'Deseja encerrar sua sessão atual?',
+        cancelavel: true,
+        textoCancelar: 'Cancelar',
+        textoConfirmar: 'Sim, sair'
+    });
+    if (!confirmado) return;
+
     try {
         if (window.techAgendaNetlifyAdminSession || window.techAgendaAdminSession) {
             await encerrarSessaoAdminServidor();
@@ -2995,7 +3208,11 @@ async function sairDaConta() {
         }
     } catch (error) {
         console.error("Erro ao sair da conta Google:", error);
-        alert("Não foi possível encerrar a sessão. Tente novamente.");
+        await mostrarDialogoTechAgenda({
+            tipo: 'erro',
+            titulo: 'Erro ao encerrar sessão',
+            mensagem: 'Não foi possível encerrar a sessão. Tente novamente.'
+        });
     }
 }
 

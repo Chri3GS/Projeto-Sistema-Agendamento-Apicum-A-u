@@ -422,6 +422,7 @@ test('sincroniza logout Google, revoga sessão administrativa e restaura botão 
     const avatar = { removeAttribute(name) { this.removedAttribute = name; } };
     const adminMenu = {};
     const order = [];
+    const dialogs = [];
     const browser = {
         window: {
             innerWidth: 1024,
@@ -464,6 +465,10 @@ test('sincroniza logout Google, revoga sessão administrativa e restaura botão 
         async encerrarSessaoAdminServidor() {
             order.push('server-session-revoked');
         },
+        async mostrarDialogoTechAgenda(options) {
+            dialogs.push(options);
+            return true;
+        },
         atualizarVisibilidadeMenuAdmin(visible) {
             adminMenu.hidden = !visible;
         },
@@ -485,6 +490,10 @@ test('sincroniza logout Google, revoga sessão administrativa e restaura botão 
     await logout();
 
     assert.deepEqual(order, ['server-session-revoked', 'google-signout']);
+    assert.equal(dialogs.length, 1);
+    assert.equal(dialogs[0].titulo, 'Encerrar sessão?');
+    assert.equal(dialogs[0].textoConfirmar, 'Sim, sair');
+    assert.equal(dialogs[0].cancelavel, true);
     assert.equal(browser.usuarioLogado, null);
     assert.equal(browser.window.techAgendaNetlifyAdminSession, false);
     assert.equal(browser.window.techAgendaAdminSession, false);

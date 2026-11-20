@@ -391,7 +391,7 @@
                         Tem alguma dúvida ou precisa de ajuda com o agendamento?
                     </p>
 
-                    <a href="https://wa.me/5598900000000" target="_blank" class="btn-whatsapp">
+                    <a id="link-whatsapp-ct" target="_blank" rel="noopener noreferrer" class="btn-whatsapp">
                         Conversar no WhatsApp
                     </a>
 
@@ -464,6 +464,24 @@
         <div class="modal-footer modal-footer-botoes">
             <button class="btn-info" onclick="fecharModalConfirmacao()">Novo Agendamento</button>
             <button class="btn-primary" id="btn-confirmacao-lista" onclick="irParaListaReservas()" hidden>Ver na Lista</button>
+        </div>
+    </div>
+</div>
+<div id="modalDialogoTechAgenda" class="modal modal-dialogo-techagenda" aria-hidden="true">
+    <div class="modal-content modal-confirmacao-content dialogo-techagenda-content" role="alertdialog"
+        aria-modal="true" aria-labelledby="dialogo-techagenda-titulo" aria-describedby="dialogo-techagenda-mensagem">
+        <div id="dialogo-techagenda-cabecalho" class="modal-header modal-header-sucesso">
+            <div id="dialogo-techagenda-icone" class="icone-sucesso-circulo" aria-hidden="true">✓</div>
+            <h2 id="dialogo-techagenda-titulo"></h2>
+            <button id="dialogo-techagenda-fechar" type="button" class="close-modal" aria-label="Fechar mensagem">&times;</button>
+        </div>
+        <div class="modal-body dialogo-techagenda-body">
+            <p id="dialogo-techagenda-mensagem" class="msg-sucesso-resumo"></p>
+            <div id="dialogo-techagenda-detalhes" class="resumo-reserva-card" hidden></div>
+        </div>
+        <div class="modal-footer modal-footer-botoes">
+            <button id="dialogo-techagenda-cancelar" type="button" class="btn-info"></button>
+            <button id="dialogo-techagenda-confirmar" type="button" class="btn-primary"></button>
         </div>
     </div>
 </div>
