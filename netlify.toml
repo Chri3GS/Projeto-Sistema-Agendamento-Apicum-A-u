@@ -9,6 +9,12 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[[headers]]
+  for = "/service-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Service-Worker-Allowed = "/"
+
 [[redirects]]
   from = "/admin/painel"
   to = "/index.html"

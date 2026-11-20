@@ -101,6 +101,19 @@ test('protege URLs administrativas e remove o login por usuário e senha', async
         const styles = await fetch(`${baseUrl}/admin.css`);
         assert.equal(styles.status, 200);
         assert.match(styles.headers.get('content-type'), /text\/css/);
+        const manifest = await fetch(`${baseUrl}/manifest.webmanifest`);
+        assert.equal(manifest.status, 200);
+        assert.match(manifest.headers.get('content-type'), /application\/manifest\+json/);
+        assert.match(await manifest.text(), /"name":\s*"TechAgenda"/);
+
+        const serviceWorker = await fetch(`${baseUrl}/service-worker.js`);
+        assert.equal(serviceWorker.status, 200);
+        assert.match(serviceWorker.headers.get('content-type'), /javascript/);
+        assert.match(await serviceWorker.text(), /\/api\//);
+
+        const pwaIcon = await fetch(`${baseUrl}/imagens/pwa-icon-192.png`);
+        assert.equal(pwaIcon.status, 200);
+        assert.match(pwaIcon.headers.get('content-type'), /image\/png/);
         assert.equal((await fetch(`${baseUrl}/server.js`)).status, 404);
     });
 });

@@ -3,7 +3,14 @@ const path = require('node:path');
 
 const root = __dirname;
 const output = path.join(root, 'dist');
-const publicFiles = ['index.html', 'script.js', 'style.css', 'admin.css'];
+const publicFiles = [
+    'index.html',
+    'script.js',
+    'style.css',
+    'admin.css',
+    'manifest.webmanifest',
+    'service-worker.js'
+];
 
 fs.mkdirSync(output, { recursive: true });
 const legacyAdminPage = path.join(output, 'admin.html');

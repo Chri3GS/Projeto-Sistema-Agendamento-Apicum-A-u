@@ -15,7 +15,8 @@ const MIME_TYPES = {
     '.jpeg': 'image/jpeg',
     '.jpg': 'image/jpeg',
     '.js': 'text/javascript; charset=utf-8',
-    '.png': 'image/png'
+    '.png': 'image/png',
+    '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
 function loadEnv() {
@@ -161,7 +162,14 @@ function serveStatic(request, response, pathname) {
         return;
     }
 
-    const isApplicationFile = ['index.html', 'script.js', 'style.css', 'admin.css'].includes(relativePath);
+    const isApplicationFile = [
+        'index.html',
+        'script.js',
+        'style.css',
+        'admin.css',
+        'manifest.webmanifest',
+        'service-worker.js'
+    ].includes(relativePath);
     const isImageFile = /^imagens[/\\][^/\\]+$/.test(relativePath);
     if (!isApplicationFile && !isImageFile) {
         response.writeHead(404).end('Não encontrado.');

@@ -233,6 +233,7 @@ let ambientesCadastrados = Object.entries(dadosSalas).map(([nome, sala]) => ({
 window.addEventListener('DOMContentLoaded', () => {
     configurarDialogoTechAgenda();
     configurarNavegacaoMobile();
+    configurarInstalacaoPwa();
     configurarContatoCT();
     const adminPanelAtLoad = isNetlifyAdminPanelRoute();
     atualizarInterfaceUsuario();
@@ -1675,6 +1676,78 @@ function configurarNavegacaoMobile() {
         fecharMenuAdminMobile();
         document.getElementById('mobile-nav-admin')?.focus();
     });
+}
+
+function configurarInstalacaoPwa() {
+    const installButton = document.getElementById('btn-instalar-app');
+    if (!installButton) return;
+
+    let installPromptEvent = null;
+    const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches ||
+        navigator.standalone === true;
+    const isAdminPanel = window.location.pathname.replace(/\/+$/, '') === '/admin/painel';
+    const updateInstallButton = () => {
+        installButton.hidden = isAdminPanel || isInstalled() || (!installPromptEvent && !isIosDevice);
+    };
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        installPromptEvent = event;
+        updateInstallButton();
+    });
+    window.addEventListener('appinstalled', () => {
+        installPromptEvent = null;
+        installButton.hidden = true;
+    });
+    installButton.addEventListener('click', async () => {
+        if (isInstalled()) {
+            updateInstallButton();
+            return;
+        }
+
+        if (installPromptEvent) {
+            const promptEvent = installPromptEvent;
+            installPromptEvent = null;
+            updateInstallButton();
+            try {
+                await promptEvent.prompt();
+                const choice = await promptEvent.userChoice;
+                if (choice.outcome === 'accepted') {
+                    installButton.hidden = true;
+                } else {
+                    updateInstallButton();
+                }
+            } catch (error) {
+                console.error('Não foi possível iniciar a instalação do TechAgenda:', error);
+                await mostrarDialogoTechAgenda({
+                    tipo: 'aviso',
+                    titulo: 'Instalação indisponível',
+                    mensagem: 'Não foi possível iniciar a instalação agora. Tente novamente pelo menu do navegador.'
+                });
+                updateInstallButton();
+            }
+            return;
+        }
+
+        if (isIosDevice) {
+            await mostrarDialogoTechAgenda({
+                tipo: 'informacao',
+                titulo: 'Adicionar à Tela de Início',
+                mensagem: 'No Safari, toque em Compartilhar e escolha “Adicionar à Tela de Início”. Se estiver usando outro navegador, abra esta página no Safari e repita o processo.'
+            });
+        }
+    });
+
+    updateInstallButton();
+    if ('serviceWorker' in navigator &&
+        (window.location.protocol === 'https:' ||
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1')) {
+        navigator.serviceWorker.register('/service-worker.js')
+            .catch((error) => console.error('Não foi possível registrar o service worker do TechAgenda:', error));
+    }
 }
 
 function toggleMobileAdminMenu() {

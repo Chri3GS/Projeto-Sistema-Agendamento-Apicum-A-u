@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <base href="/">
     <meta name="techagenda-backend" content="netlify">
+    <meta name="theme-color" content="#0e3da3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="TechAgenda">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="/imagens/pwa-icon-192.png">
+    <link rel="apple-touch-icon" href="/imagens/pwa-icon-192.png">
     <title>Agenda CT APC</title>
     <script>
         if (window.location.pathname.replace(/\/+$/, '') === '/admin/painel') {
@@ -58,6 +65,13 @@
             <img src="imagens/icone login.png" class="nav-icon" id="icone-login-topo" alt="">
             <img class="avatar-usuario-topo" id="avatar-usuario-topo" alt="Foto do usuário" hidden>
             <span id="texto-usuario-topo">Entrar</span>
+        </button>
+        <button class="mobile-install-button" id="btn-instalar-app" type="button" hidden
+            aria-label="Instalar o TechAgenda" title="Instalar o TechAgenda">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 15v5h14v-5"></path>
+            </svg>
+            <span>Instalar</span>
         </button>
         <section id="home" class="view">
     <h1>Ambientes disponíveis</h1>
