@@ -275,11 +275,40 @@ test('parser de reservas entende o formato de data usado pelo backend', () => {
     assert.equal(interval.horaFim, '09:00');
 });
 
+test('os seletores personalizados aceitam datas e minutos livres sem abrir mão dos limites', () => {
+    const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+    const dateStart = script.indexOf('function normalizarDataReserva(value)');
+    const timeStart = script.indexOf('function normalizarHoraReserva(value)', dateStart);
+    const limitsStart = script.indexOf('function limitesHoraReserva(input)', timeStart);
+    const readDateStart = script.indexOf('function lerDataReserva()', limitsStart);
+    assert.ok(dateStart >= 0 && timeStart > dateStart && limitsStart > timeStart);
+    assert.ok(readDateStart > limitsStart, 'encontrou a leitura dos limites');
+
+    const helpers = vm.runInNewContext(
+        `${script.slice(dateStart, timeStart)}\n${script.slice(timeStart, limitsStart)}\n${script.slice(limitsStart, readDateStart)}; ({ normalizarDataReserva, normalizarHoraReserva, limitesHoraReserva });`
+    );
+
+    assert.equal(helpers.normalizarDataReserva('20/11/2026'), '2026-11-20');
+    assert.equal(helpers.normalizarDataReserva('20112026'), '2026-11-20');
+    assert.equal(helpers.normalizarDataReserva('31/02/2026'), '');
+    assert.equal(helpers.normalizarHoraReserva('14:37'), '14:37');
+    assert.equal(helpers.normalizarHoraReserva('1437'), '14:37');
+    assert.equal(helpers.normalizarHoraReserva('24:00'), '');
+    assert.equal(helpers.limitesHoraReserva({ id: 'hora-inicio' }).max, '17:30');
+    assert.equal(helpers.limitesHoraReserva({ id: 'hora-fim' }).min, '08:30');
+});
+
 test('a grade mostra somente manhã e tarde e não oferece o horário de almoço', () => {
     const script = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
     const start = script.indexOf('function carregarGradeHorarios()');
     const end = script.indexOf('// Ao clicar em um slot livre', start);
+    const normalizeStart = script.indexOf('function normalizarDataReserva(value)');
+    const normalizeEnd = script.indexOf('function normalizarHoraReserva(value)', normalizeStart);
+    const readDateStart = script.indexOf('function lerDataReserva()', normalizeEnd);
+    const readDateEnd = script.indexOf('function criarBotaoSeletor', readDateStart);
     assert.ok(start >= 0 && end > start, 'encontrou a renderização da grade');
+    assert.ok(normalizeStart >= 0 && normalizeEnd > normalizeStart, 'encontrou a normalização da data');
+    assert.ok(readDateStart >= 0 && readDateEnd > readDateStart, 'encontrou a leitura da data');
 
     const elements = {
         'container-grade-turnos': { scrollTop: 0, innerHTML: '' },
@@ -291,7 +320,7 @@ test('a grade mostra somente manhã e tarde e não oferece o horário de almoço
         'hora-fim': { value: '' }
     };
     const render = vm.runInNewContext(
-        `${script.slice(start, end)}; carregarGradeHorarios;`,
+        `${script.slice(normalizeStart, normalizeEnd)}\n${script.slice(readDateStart, readDateEnd)}\n${script.slice(start, end)}; carregarGradeHorarios;`,
         {
             document: { getElementById: (id) => elements[id] || null },
             ambientesCadastrados: [{

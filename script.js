@@ -11,6 +11,7 @@ let disponibilidadeCarregada = false;
 let usuarioLogado = null;
 let minhasReservas = [];
 let abaMinhasReservasAtiva = 'agendadas';
+let seletorReservaAberto = null;
 let secaoPendenteAposLogin = window.sessionStorage.getItem('techagenda:pending-section');
 window.techAgendaFirebaseAdmin = false;
 window.techAgendaNetlifyAdminSession = false;
@@ -88,6 +89,7 @@ window.addEventListener('DOMContentLoaded', () => {
     atualizarInterfaceUsuario();
     configurarFiltrosLista();
     configurarAbasMinhasReservas();
+    configurarSeletoresReservaPersonalizados();
     configurarUploadImagemAmbiente();
     renderizarAmbientes();
     atualizarOpcoesAmbiente();
@@ -1475,17 +1477,323 @@ function formatarDataBR(dataStr) {
     return dataStr;
 }
 
-// Inicializa a data no input e bloqueia datas passadas nativamente
+function normalizarDataReserva(value) {
+    const text = String(value || '').trim();
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const br = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/) ||
+        text.match(/^(\d{2})(\d{2})(\d{4})$/);
+    const ano = iso ? iso[1] : br?.[3];
+    const mes = iso ? iso[2] : br?.[2];
+    const dia = iso ? iso[3] : br?.[1];
+    if (!ano || !mes || !dia) return '';
+    const date = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== `${ano}-${mes}-${dia}`) {
+        return '';
+    }
+    return `${ano}-${mes}-${dia}`;
+}
+
+function normalizarHoraReserva(value) {
+    const text = String(value || '').trim();
+    const digits = text.match(/^(\d{3,4})$/);
+    const match = text.match(/^(\d{1,2}):([0-5]\d)$/) ||
+        (digits && [`${digits[1]}:`, digits[1].padStart(4, '0').slice(0, 2), digits[1].padStart(4, '0').slice(2)]);
+    if (!match || Number(match[1]) > 23) return '';
+    return `${String(Number(match[1])).padStart(2, '0')}:${match[2]}`;
+}
+
+function limitesHoraReserva(input) {
+    return input.id === 'hora-inicio'
+        ? { min: '08:00', max: '17:30' }
+        : { min: '08:30', max: '18:00' };
+}
+
+function lerDataReserva() {
+    return normalizarDataReserva(document.getElementById('data-reserva')?.value);
+}
+
+function criarBotaoSeletor(texto, className, onClick, ariaLabel) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = texto;
+    if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
+    button.addEventListener('click', onClick);
+    return button;
+}
+
+function configurarSeletoresReservaPersonalizados() {
+    const dateInput = document.getElementById('data-reserva');
+    const timeInputs = [
+        document.getElementById('hora-inicio'),
+        document.getElementById('hora-fim')
+    ].filter(Boolean);
+
+    [dateInput, ...timeInputs].filter(Boolean).forEach((input) => {
+        input.addEventListener('click', () => abrirSeletorReserva(input));
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && seletorReservaAberto) {
+                event.preventDefault();
+                fecharSeletorReserva(true);
+            } else if (['Enter', 'ArrowDown'].includes(event.key)) {
+                event.preventDefault();
+                abrirSeletorReserva(input);
+            }
+        });
+    });
+
+    document.addEventListener('pointerdown', (event) => {
+        if (!seletorReservaAberto) return;
+        if (event.target !== seletorReservaAberto.input &&
+            !seletorReservaAberto.popup.contains(event.target)) {
+            fecharSeletorReserva(false);
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && seletorReservaAberto) {
+            fecharSeletorReserva(true);
+        }
+    });
+    window.addEventListener('resize', posicionarSeletorReserva);
+    window.addEventListener('scroll', posicionarSeletorReserva, true);
+}
+
+function abrirSeletorReserva(input) {
+    if (seletorReservaAberto?.input === input) {
+        fecharSeletorReserva(false);
+        return;
+    }
+    fecharSeletorReserva(false);
+    const isDate = input.id === 'data-reserva';
+    const popup = isDate ? criarCalendarioReserva(input) : criarRelogioReserva(input);
+    document.body.appendChild(popup);
+    seletorReservaAberto = { input, popup };
+    input.setAttribute('aria-expanded', 'true');
+    posicionarSeletorReserva();
+}
+
+function posicionarSeletorReserva() {
+    if (!seletorReservaAberto) return;
+    const { input, popup } = seletorReservaAberto;
+    const bounds = input.getBoundingClientRect();
+    const width = Math.min(input.id === 'data-reserva' ? 340 : 380, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12));
+    popup.style.width = `${width}px`;
+    const height = popup.offsetHeight;
+    const top = bounds.bottom + height + 10 <= window.innerHeight
+        ? bounds.bottom + 8
+        : Math.max(8, bounds.top - height - 8);
+    popup.style.left = `${left}px`;
+    popup.style.top = `${top}px`;
+}
+
+function fecharSeletorReserva(restaurarFoco) {
+    if (!seletorReservaAberto) return;
+    const { input, popup } = seletorReservaAberto;
+    input.setAttribute('aria-expanded', 'false');
+    popup.remove();
+    seletorReservaAberto = null;
+    if (restaurarFoco) input.focus();
+}
+
+function criarCalendarioReserva(input) {
+    const popup = document.createElement('div');
+    popup.id = 'reserva-date-picker';
+    popup.className = 'custom-reservation-picker custom-reservation-calendar';
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-label', 'Selecionar data da reserva');
+
+    const isoDate = normalizarDataReserva(input.value) || getHojeFormatado();
+    const [year, month] = isoDate.split('-').map(Number);
+    const state = { year, month: month - 1 };
+
+    function render() {
+        popup.replaceChildren();
+        const header = document.createElement('div');
+        header.className = 'custom-picker-header';
+        const previous = criarBotaoSeletor('‹', 'custom-picker-nav', () => {
+            state.month -= 1;
+            if (state.month < 0) {
+                state.month = 11;
+                state.year -= 1;
+            }
+            render();
+        }, 'Mês anterior');
+        const title = document.createElement('h3');
+        title.textContent = new Intl.DateTimeFormat('pt-BR', {
+            month: 'long',
+            year: 'numeric'
+        }).format(new Date(state.year, state.month, 1));
+        const next = criarBotaoSeletor('›', 'custom-picker-nav', () => {
+            state.month += 1;
+            if (state.month > 11) {
+                state.month = 0;
+                state.year += 1;
+            }
+            render();
+        }, 'Próximo mês');
+        header.append(previous, title, next);
+
+        const grid = document.createElement('div');
+        grid.className = 'custom-calendar-grid';
+        grid.setAttribute('role', 'grid');
+        ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].forEach((day, index) => {
+            const weekday = document.createElement('span');
+            weekday.className = 'custom-calendar-weekday';
+            weekday.textContent = day;
+            weekday.setAttribute('aria-label', [
+                'Segunda-feira', 'Terça-feira', 'Quarta-feira',
+                'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'
+            ][index]);
+            grid.appendChild(weekday);
+        });
+
+        const firstDay = new Date(state.year, state.month, 1);
+        const offset = (firstDay.getDay() + 6) % 7;
+        const daysInMonth = new Date(state.year, state.month + 1, 0).getDate();
+        const selectedDate = normalizarDataReserva(input.value);
+        const minimumDate = getHojeFormatado();
+        for (let index = 0; index < 42; index += 1) {
+            const dayNumber = index - offset + 1;
+            const isCurrentMonth = dayNumber >= 1 && dayNumber <= daysInMonth;
+            const dayDate = new Date(state.year, state.month, dayNumber);
+            const value = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`;
+            const button = criarBotaoSeletor(
+                String(dayDate.getDate()),
+                `custom-calendar-day${isCurrentMonth ? '' : ' outside-month'}${value === selectedDate ? ' selected' : ''}`,
+                () => {
+                    input.value = formatarDataBR(value);
+                    input.removeAttribute('aria-invalid');
+                    fecharSeletorReserva(true);
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            );
+            button.disabled = !isCurrentMonth || value < minimumDate;
+            button.setAttribute('aria-label', formatarDataBR(value));
+            if (value === selectedDate) button.setAttribute('aria-pressed', 'true');
+            grid.appendChild(button);
+        }
+
+        const footer = document.createElement('div');
+        footer.className = 'custom-picker-footer';
+        footer.appendChild(criarBotaoSeletor('Fechar', 'custom-picker-link', () =>
+            fecharSeletorReserva(true)
+        ));
+        footer.appendChild(criarBotaoSeletor('Hoje', 'custom-picker-link', () => {
+            input.value = formatarDataBR(getHojeFormatado());
+            input.removeAttribute('aria-invalid');
+            fecharSeletorReserva(true);
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }));
+        popup.append(header, grid, footer);
+    }
+
+    render();
+    return popup;
+}
+
+function criarRelogioReserva(input) {
+    const popup = document.createElement('div');
+    popup.id = 'reserva-time-picker';
+    popup.className = 'custom-reservation-picker custom-reservation-time-picker';
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-label', `Selecionar horário de ${input.id === 'hora-inicio' ? 'início' : 'término'}`);
+
+    const valorAtual = normalizarHoraReserva(input.value);
+    const state = {
+        hora: valorAtual ? Number(valorAtual.slice(0, 2)) : 8,
+        minuto: valorAtual ? Number(valorAtual.slice(3, 5)) : 0,
+        alterado: false
+    };
+    const limits = limitesHoraReserva(input);
+    const fallbackMinute = input.id === 'hora-fim' ? 30 : 0;
+    if (!valorAtual) state.minuto = fallbackMinute;
+
+    const header = document.createElement('div');
+    header.className = 'custom-time-header';
+    const selectedTime = document.createElement('strong');
+    const closeButton = criarBotaoSeletor('×', 'custom-picker-close', () => fecharSeletorReserva(true), 'Fechar');
+    header.append(selectedTime, closeButton);
+
+    const columns = document.createElement('div');
+    columns.className = 'custom-time-columns';
+    const hourColumn = document.createElement('section');
+    const minuteColumn = document.createElement('section');
+    const hourTitle = document.createElement('h3');
+    const minuteTitle = document.createElement('h3');
+    hourTitle.textContent = 'Hora';
+    minuteTitle.textContent = 'Minuto';
+    const hours = document.createElement('div');
+    const minutes = document.createElement('div');
+    hours.className = 'custom-time-options hours';
+    minutes.className = 'custom-time-options minutes';
+    hourColumn.append(hourTitle, hours);
+    minuteColumn.append(minuteTitle, minutes);
+    columns.append(hourColumn, minuteColumn);
+
+    const footer = document.createElement('div');
+    footer.className = 'custom-picker-footer';
+    const apply = criarBotaoSeletor('Aplicar horário', 'custom-picker-apply', () => {
+        if (!state.alterado) return;
+        input.value = `${String(state.hora).padStart(2, '0')}:${String(state.minuto).padStart(2, '0')}`;
+        input.removeAttribute('aria-invalid');
+        fecharSeletorReserva(true);
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    apply.disabled = true;
+    footer.appendChild(apply);
+
+    function refresh() {
+        selectedTime.textContent = `${String(state.hora).padStart(2, '0')}:${String(state.minuto).padStart(2, '0')}`;
+        apply.disabled = !state.alterado;
+        hours.querySelectorAll('button').forEach((button) => {
+            button.classList.toggle('selected', Number(button.dataset.value) === state.hora);
+            const candidate = `${String(Number(button.dataset.value)).padStart(2, '0')}:${String(state.minuto).padStart(2, '0')}`;
+            button.disabled = candidate < limits.min || candidate > limits.max;
+        });
+        minutes.querySelectorAll('button').forEach((button) => {
+            button.classList.toggle('selected', Number(button.dataset.value) === state.minuto);
+            const candidate = `${String(state.hora).padStart(2, '0')}:${String(Number(button.dataset.value)).padStart(2, '0')}`;
+            button.disabled = candidate < limits.min || candidate > limits.max;
+        });
+    }
+
+    for (let hour = 0; hour < 24; hour += 1) {
+        const value = String(hour).padStart(2, '0');
+        const button = criarBotaoSeletor(value, 'custom-time-option', () => {
+            state.hora = hour;
+            state.alterado = true;
+            refresh();
+        });
+        button.dataset.value = String(hour);
+        hours.appendChild(button);
+    }
+    for (let minute = 0; minute < 60; minute += 1) {
+        const value = String(minute).padStart(2, '0');
+        const button = criarBotaoSeletor(value, 'custom-time-option', () => {
+            state.minuto = minute;
+            state.alterado = true;
+            refresh();
+        });
+        button.dataset.value = String(minute);
+        minutes.appendChild(button);
+    }
+
+    popup.append(header, columns, footer);
+    refresh();
+    return popup;
+}
+
+// Inicializa a data no campo e mantém datas anteriores a hoje indisponíveis no calendário
 function garantirDataInicialReserva() {
     const inputData = document.getElementById('data-reserva');
     if (!inputData) return;
 
     const hoje = getHojeFormatado();
-    inputData.min = hoje; // Bloqueia datas passadas no seletor nativo
+    inputData.dataset.min = hoje;
 
-    if (!inputData.value) {
-        inputData.value = hoje;
-    }
+    const dataAtual = normalizarDataReserva(inputData.value);
+    inputData.value = formatarDataBR(dataAtual && dataAtual >= hoje ? dataAtual : hoje);
 }
 
 // Chamado ao trocar o ambiente no select da tela de Reserva
@@ -1501,10 +1809,17 @@ function aoMudarData() {
     if (!inputData) return;
 
     const hoje = getHojeFormatado();
-    if (inputData.value && inputData.value < hoje) {
+    const data = normalizarDataReserva(inputData.value);
+    if (!data) {
+        inputData.setAttribute('aria-invalid', 'true');
+        mostrarAlertaReserva("erro", "Informe uma data válida no formato DD/MM/AAAA.");
+    } else if (data < hoje) {
         mostrarAlertaReserva("erro", "⚠️ Não é permitido agendar em datas passadas. A data foi redefinida para hoje.");
-        inputData.value = hoje;
+        inputData.value = formatarDataBR(hoje);
+        inputData.removeAttribute('aria-invalid');
     } else {
+        inputData.value = formatarDataBR(data);
+        inputData.removeAttribute('aria-invalid');
         limparAlertaReserva();
     }
 
@@ -1524,9 +1839,34 @@ function aoMudarHorarioManual() {
 
     if (!inputInicio || !inputFim) return;
 
-    const horaInicio = inputInicio.value;
-    const horaFim = inputFim.value;
-    const dataReserva = inputData ? inputData.value : getHojeFormatado();
+    const horaInicio = normalizarHoraReserva(inputInicio.value);
+    const horaFim = normalizarHoraReserva(inputFim.value);
+    if ((inputInicio.value && !horaInicio) || (inputFim.value && !horaFim)) {
+        inputInicio.setAttribute('aria-invalid', String(Boolean(inputInicio.value && !horaInicio)));
+        inputFim.setAttribute('aria-invalid', String(Boolean(inputFim.value && !horaFim)));
+        mostrarAlertaReserva("erro", "Informe os horários no formato HH:MM.");
+        atualizarDestaqueSlots(inputInicio.value, inputFim.value);
+        return;
+    }
+    inputInicio.value = horaInicio;
+    inputFim.value = horaFim;
+    const limiteInicio = limitesHoraReserva(inputInicio);
+    const limiteFim = limitesHoraReserva(inputFim);
+    if ((horaInicio && (horaInicio < limiteInicio.min || horaInicio > limiteInicio.max)) ||
+        (horaFim && (horaFim < limiteFim.min || horaFim > limiteFim.max))) {
+        inputInicio.setAttribute('aria-invalid', String(Boolean(
+            horaInicio && (horaInicio < limiteInicio.min || horaInicio > limiteInicio.max)
+        )));
+        inputFim.setAttribute('aria-invalid', String(Boolean(
+            horaFim && (horaFim < limiteFim.min || horaFim > limiteFim.max)
+        )));
+        mostrarAlertaReserva("erro", "O horário deve respeitar os limites do campo selecionado.");
+        atualizarDestaqueSlots(horaInicio, horaFim);
+        return;
+    }
+    inputInicio.removeAttribute('aria-invalid');
+    inputFim.removeAttribute('aria-invalid');
+    const dataReserva = inputData ? (lerDataReserva() || getHojeFormatado()) : getHojeFormatado();
     const ambiente = selectAmbiente ? selectAmbiente.value : "Biblioteca";
     const ambienteConfig = ambientesCadastrados.find((item) => item.nome === ambiente);
     const horaAbertura = ambienteConfig?.abertura > '08:00' ? ambienteConfig.abertura : '08:00';
@@ -1733,7 +2073,7 @@ function carregarGradeHorarios() {
     const scrollPosAnterior = container.scrollTop;
 
     const ambiente = selectAmbiente.value;
-    const dataReserva = inputData.value || getHojeFormatado();
+    const dataReserva = lerDataReserva() || getHojeFormatado();
 
     if (textoData) {
         textoData.innerText = `${formatarDataBR(dataReserva)} • ${ambiente}`;
@@ -1890,7 +2230,7 @@ function selecionarSlotGrade(inicioStr, fimStr) {
         inputInicio.value = inicioStr;
         inputFim.value = fimStr;
 
-        const dataReserva = inputData ? inputData.value : getHojeFormatado();
+        const dataReserva = inputData ? (lerDataReserva() || getHojeFormatado()) : getHojeFormatado();
         sincronizarCamposLegados(dataReserva, inicioStr, fimStr);
 
         limparAlertaReserva();
@@ -1928,7 +2268,7 @@ async function salvarReserva() {
 
     const ambiente = selectAmbiente ? selectAmbiente.value : "Biblioteca";
     const motivo = inputMotivo ? inputMotivo.value.trim() : "";
-    const dataReserva = inputData ? inputData.value : "";
+    const dataReserva = inputData ? lerDataReserva() : "";
     const horaInicio = inputInicio ? inputInicio.value : "";
     const horaFim = inputFim ? inputFim.value : "";
     const ambienteConfig = ambientesCadastrados.find((item) => item.nome === ambiente);
@@ -1936,6 +2276,14 @@ async function salvarReserva() {
     // 2. Validação de preenchimento dos campos obrigatórios
     if (!ambienteConfig || !ambienteConfig.ativo || !dataReserva || !horaInicio || !horaFim) {
         mostrarAlertaReserva("erro", "⚠️ Por favor, preencha a data e os horários de início e término!");
+        return;
+    }
+
+    const limiteInicio = limitesHoraReserva(inputInicio);
+    const limiteFim = limitesHoraReserva(inputFim);
+    if (horaInicio < limiteInicio.min || horaInicio > limiteInicio.max ||
+        horaFim < limiteFim.min || horaFim > limiteFim.max) {
+        mostrarAlertaReserva("erro", "O horário deve respeitar os limites do campo selecionado.");
         return;
     }
 
