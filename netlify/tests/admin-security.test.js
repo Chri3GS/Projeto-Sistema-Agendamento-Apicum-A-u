@@ -12,9 +12,10 @@ test('signs expiring sessions and rejects tampering or expired tokens', () => {
     const sessionId = crypto.randomBytes(32).toString('hex');
     const expiresAt = Date.now() + 60_000;
     const token = createSessionToken(sessionId, expiresAt, secret);
+    const tamperedToken = `${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`;
 
     assert.deepEqual(verifySessionToken(token, secret), { sessionId, expiresAt });
-    assert.equal(verifySessionToken(`${token.slice(0, -1)}0`, secret), null);
+    assert.equal(verifySessionToken(tamperedToken, secret), null);
     assert.equal(verifySessionToken(token, secret, expiresAt), null);
     assert.match(sessionCookie(token), /HttpOnly; Secure; SameSite=Strict; Path=\//);
 });

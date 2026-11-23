@@ -21,6 +21,11 @@ window.techAgendaAdminSession = false;
 window.techAgendaBackend = document.querySelector(
     'meta[name="techagenda-backend"]'
 )?.content || 'netlify';
+function backendFunctionPath(name) {
+    return window.techAgendaBackend === 'vercel'
+        ? `/api/${name}`
+        : `/.netlify/functions/${name}`;
+}
 const perfisEmCarregamento = new Map();
 const MAX_IMAGE_UPLOAD_BYTES = 4 * 1024 * 1024;
 let ambientePreviewObjectUrl = null;
@@ -314,7 +319,7 @@ window.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     window.techAgendaNetlifyAdminSession =
-                        window.techAgendaBackend === 'netlify';
+                        window.techAgendaBackend !== 'local';
                     window.techAgendaAdminSession =
                         window.techAgendaBackend === 'local';
                     window.techAgendaFirebaseAdmin = false;
@@ -355,7 +360,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     const openUserReservations = secaoPendenteAposLogin === 'minhas-reservas' ||
                         window.sessionStorage.getItem('techagenda:pending-section') === 'minhas-reservas';
                     window.techAgendaNetlifyAdminSession =
-                        window.techAgendaBackend === 'netlify';
+                        window.techAgendaBackend !== 'local';
                     window.techAgendaAdminSession =
                         window.techAgendaBackend === 'local';
                     window.techAgendaFirebaseAdmin = false;
@@ -493,7 +498,7 @@ async function iniciarSessaoAdminServidor(firebaseUser, validarSessaoExistente =
     const isLocal = window.techAgendaBackend === 'local';
     const endpoint = isLocal
         ? '/api/admin/session'
-        : '/.netlify/functions/admin-session';
+        : backendFunctionPath('admin-session');
     const idToken = await firebaseUser.getIdToken();
     const response = await fetch(endpoint, {
         method: 'POST',
@@ -515,7 +520,7 @@ async function iniciarSessaoAdminServidor(firebaseUser, validarSessaoExistente =
 async function encerrarSessaoAdminServidor(keepalive = false) {
     const endpoint = window.techAgendaBackend === 'local'
         ? '/api/admin/logout'
-        : '/.netlify/functions/admin-logout';
+        : backendFunctionPath('admin-logout');
     const response = await fetch(endpoint, {
         method: 'POST',
         credentials: 'same-origin',
@@ -542,7 +547,7 @@ function sincronizarEstadoAutenticacao(firebaseUser) {
 async function carregarReservasDisponibilidade() {
     const endpoint = window.techAgendaBackend === 'local'
         ? '/api/reservation-availability'
-        : '/.netlify/functions/reservation-availability';
+        : backendFunctionPath('reservation-availability');
     try {
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -573,7 +578,7 @@ async function apiNetlifyAdmin(action, data = {}) {
     if (!window.techAgendaNetlifyAdminSession) {
         throw new Error('Sessão administrativa inválida ou expirada.');
     }
-    const response = await fetch('/.netlify/functions/admin-api', {
+    const response = await fetch(backendFunctionPath('admin-api'), {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
@@ -610,7 +615,7 @@ async function apiReservasUsuario(action, data = {}) {
     const token = await firebaseUser.getIdToken();
     const endpoint = window.techAgendaBackend === 'local'
         ? '/api/user/reservas'
-        : '/.netlify/functions/user-reservations';
+        : backendFunctionPath('user-reservations');
     const response = await fetch(endpoint, {
         method: 'POST',
         credentials: 'same-origin',
@@ -631,7 +636,7 @@ async function apiReservasUsuario(action, data = {}) {
 async function consultarDisponibilidadeAtualizada() {
     const endpoint = window.techAgendaBackend === 'local'
         ? '/api/reservation-availability'
-        : '/.netlify/functions/reservation-availability';
+        : backendFunctionPath('reservation-availability');
     const response = await fetch(endpoint, {
         method: 'POST',
         credentials: 'same-origin',
@@ -1034,7 +1039,7 @@ function limparPreviaImagemAmbiente() {
 }
 
 async function enviarImagemAmbiente(file) {
-    const response = await fetch('/.netlify/functions/environment-images', {
+    const response = await fetch(backendFunctionPath('environment-images'), {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': file.type },
@@ -1068,7 +1073,7 @@ async function salvarAmbienteAdmin(event) {
         }
         if (imageFile) {
             if (!window.techAgendaNetlifyAdminSession) {
-                throw new Error('O envio de imagens exige uma sessão administrativa do Netlify.');
+                throw new Error('O envio de imagens exige uma sessão administrativa.');
             }
             imagem = await enviarImagemAmbiente(imageFile);
             document.getElementById('admin-ambiente-imagem').value = imagem;
@@ -2875,7 +2880,7 @@ async function salvarReserva() {
                 motivo
         };
         const token = await firebaseUser.getIdToken();
-        const savedReservation = await apiJson('/.netlify/functions/reservations', {
+        const savedReservation = await apiJson(backendFunctionPath('reservations'), {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: JSON.stringify(reservationData)

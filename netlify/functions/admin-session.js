@@ -64,7 +64,7 @@ function createHandler(runtimeProvider = getRuntime) {
 
             const adminUid = process.env.ADMIN_UID;
             if (!adminUid) {
-                throw new Error('ADMIN_UID não foi configurado no ambiente Netlify.');
+                throw new Error('ADMIN_UID não foi configurado no ambiente do servidor.');
             }
             if (tokenResult.error) {
                 const error = tokenResult.error;

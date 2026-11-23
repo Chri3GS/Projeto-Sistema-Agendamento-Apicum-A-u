@@ -12,7 +12,7 @@ function getRuntime() {
     if (runtime) return runtime;
     const encodedAccount = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
     if (!encodedAccount) {
-        throw new Error('FIREBASE_ADMIN_SERVICE_ACCOUNT não foi configurada no ambiente Netlify.');
+        throw new Error('FIREBASE_ADMIN_SERVICE_ACCOUNT não foi configurada no ambiente do servidor.');
     }
     const serviceAccount = JSON.parse(encodedAccount);
     const projectId = getConfiguredProjectId();

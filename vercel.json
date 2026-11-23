@@ -1,0 +1,36 @@
+{
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/.netlify/functions/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/admin/painel",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/admin",
+      "destination": "/?login=google",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/service-worker.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    }
+  ]
+}
